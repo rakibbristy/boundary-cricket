@@ -12,17 +12,21 @@ jobs:
     container:
       image: barichello/godot-ci:4.3
 
+    env:
+      HOME: /root
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check Android tools
+      - name: Check Android setup
         run: |
-          echo "Checking Android SDK..."
-          java -version
           godot --version
-          ls -la /usr/lib/android-sdk || true
-          ls -la /opt/android-sdk || true
+          java -version
+          test -f /root/debug.keystore
+          test -d /root/.local/share/godot/export_templates/4.3.stable
+          test -d /usr/lib/android-sdk
+          test -d /usr/lib/jvm/java-17-openjdk-amd64
 
       - name: Extract cricket project
         run: |
@@ -37,7 +41,6 @@ jobs:
 
       - name: Configure Android export
         run: |
-          mkdir -p game/build
           cd game
           cat > export_presets.cfg <<'EOF'
           [preset.0]
@@ -65,7 +68,7 @@ jobs:
           version/name="1.0"
           package/unique_name="com.example.boundarycricket"
           package/name="Boundary Cricket"
-          package/signed=false
+          package/signed=true
           screen/immersive_mode=true
           EOF
 
@@ -75,6 +78,7 @@ jobs:
 
       - name: Build Android APK
         run: |
+          mkdir -p game/build
           godot --headless --path game --export-debug "Android" game/build/BoundaryCricket.apk
 
       - name: Verify APK
