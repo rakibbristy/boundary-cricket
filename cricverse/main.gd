@@ -30,6 +30,12 @@ var run_in_progress := false
 var run_timer := 0.0
 var completed_runs_this_ball := 0
 var shot_boundary_done := false
+var fielder_nodes: Array[Node3D] = []
+var run_start_z := 7.2
+var run_target_z := -7.2
+const RUN_DURATION := 2.6
+const MAX_WICKETS := 10
+const MAX_BALLS := 120
 
 func _ready() -> void:
 	_build_world()
@@ -270,6 +276,7 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	var fielder := Node3D.new()
 	fielder.position = pos
 	add_child(fielder)
+	fielder_nodes.append(fielder)
 	if _load_rigged_character("res://assets/players/fielder.gltf", fielder):
 		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
@@ -463,6 +470,8 @@ func _attempt_run() -> void:
 		return
 	run_in_progress = true
 	run_timer = 0.0
+	run_start_z = batter.position.z if is_instance_valid(batter) else 7.2
+	run_target_z = -7.2 if run_start_z > 0.0 else 7.2
 	run_button.disabled = true
 	_show_status("RUNNING! Tap again after reaching the crease")
 
@@ -543,24 +552,6 @@ func _play_shot(power: float) -> void:
 		return
 	hit_done = true
 	var timing_quality: float = clampf(1.0 - timing_error / 2.55, 0.0, 1.0)
-	var runs := 0
-	if power > 1.2:
-		if timing_quality > 0.78:
-			runs = 6 if randf() < 0.58 else 4
-		elif timing_quality > 0.48:
-			runs = 4 if randf() < 0.55 else 2
-		else:
-			runs = 1 if randf() < 0.5 else 0
-	elif power > 0.8:
-		if timing_quality > 0.72:
-			runs = 4 if randf() < 0.55 else 2
-		elif timing_quality > 0.35:
-			runs = 2 if randf() < 0.65 else 1
-		else:
-			runs = 1
-	else:
-		runs = 1 if timing_quality > 0.2 else 0
-	score += runs
 	shot_power = power
 	ball_state = "shot"
 	completed_runs_this_ball = 0
@@ -570,11 +561,11 @@ func _play_shot(power: float) -> void:
 	var hit_direction := -1.0 if randf() < 0.72 else 1.0
 	ball_velocity = Vector3(randf_range(-5.0, 5.0), 4.0 + power * 3.0, hit_direction * (8.0 + power * 3.0))
 	if timing_quality > 0.78:
-		_show_status("PERFECT CONTACT!  +%d RUNS" % runs)
+		_show_status("PERFECT CONTACT! RUN OR WATCH THE BOUNDARY")
 	elif timing_quality > 0.45:
-		_show_status("GOOD SHOT!  +%d RUNS" % runs)
+		_show_status("GOOD SHOT! RUN OR WATCH THE BOUNDARY")
 	else:
-		_show_status("EDGED!  +%d RUNS" % runs)
+		_show_status("EDGED! BALL IN PLAY")
 	_animate_bat_swing()
 	_update_score()
 
@@ -602,6 +593,11 @@ func _finish_delivery(message: String = "") -> void:
 func _process(delta: float) -> void:
 	if not match_started:
 		return
+	if wickets >= MAX_WICKETS or balls >= MAX_BALLS:
+		match_started = false
+		_set_controls()
+		_show_status("INNINGS COMPLETE • FINAL SCORE %d/%d" % [score, wickets])
+		return
 	if play_mode == "batting" and not delivery_active:
 		auto_delivery_timer -= delta
 		if auto_delivery_timer <= 0.0:
@@ -621,15 +617,12 @@ func _process(delta: float) -> void:
 	ball.position += ball_velocity * delta
 	if run_in_progress:
 		run_timer += delta
-		if run_timer >= 1.05:
+		var run_progress: float = clampf(run_timer / RUN_DURATION, 0.0, 1.0)
+		if is_instance_valid(batter):
+			batter.position.z = lerpf(run_start_z, run_target_z, run_progress)
+			batter.rotation_degrees.y = 180.0 if run_start_z > 0.0 else 0.0
+		if run_progress >= 1.0:
 			run_in_progress = false
-			if randf() < 0.07:
-				wickets += 1
-				_show_status("RUN OUT! Batter did not reach the crease")
-				if is_instance_valid(run_button):
-					run_button.disabled = true
-				_finish_delivery()
-				return
 			completed_runs_this_ball += 1
 			score += 1
 			_update_score()
@@ -704,7 +697,7 @@ func _process(delta: float) -> void:
 
 func _update_score() -> void:
 	if is_instance_valid(runs_label):
-		runs_label.text = "CRICVERSE   %d/%d   •   %d.%d overs" % [score, wickets, int(balls / 6), balls % 6]
+		runs_label.text = "CRICVERSE   %d/%d   •   %d.%d / 20 overs" % [score, wickets, int(balls / 6), balls % 6]
 
 func _show_status(message: String) -> void:
 	if is_instance_valid(status_label):
