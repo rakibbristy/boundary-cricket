@@ -25,6 +25,11 @@ var drive_button: Button
 var loft_button: Button
 var swap_button: Button
 var controls_swapped := false
+var run_button: Button
+var run_in_progress := false
+var run_timer := 0.0
+var completed_runs_this_ball := 0
+var shot_boundary_done := false
 
 func _ready() -> void:
 	_build_world()
