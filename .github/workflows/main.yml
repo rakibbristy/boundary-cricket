@@ -34,6 +34,7 @@ jobs:
           fi
 
           mkdir -p extracted game
+          unzip -t "$ZIP_FILE"
           unzip -q "$ZIP_FILE" -d extracted
 
           PROJECT_DIR="$(find extracted -name project.godot -printf '%h\n' | head -n 1)"
@@ -45,8 +46,179 @@ jobs:
 
           cp -a "$PROJECT_DIR"/. game/
 
-          # Enable Android-compatible ETC2/ASTC texture import.
-          python3 -c 'from pathlib import Path; p=Path("game/project.godot"); s=p.read_text(); k="textures/vram_compression/import_etc2_astc=true"; s=s if k in s else (s.replace("[rendering]", "[rendering]\n"+k, 1) if "[rendering]" in s else s+"\n[rendering]\n"+k+"\n"); p.write_text(s)'
+          # Enable Android-compatible ETC2/ASTC texture import without Python.
+          if grep -q '^\[rendering\]' game/project.godot; then
+            grep -q '^textures/vram_compression/import_etc2_astc=true
+
+
+      - name: Configure Android SDK
+        run: |
+          set -e
+
+          SDKMANAGER="$(find /usr/lib/android-sdk -name sdkmanager -type f | head -n 1)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "SDK Manager not found"
+            exit 1
+          fi
+
+          chmod +x "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-33" \
+            "platforms;android-34" \
+            "build-tools;33.0.2" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "ndk;23.2.8568313" \
+            "cmake;3.10.2.4988404"
+
+          echo "Checking Android SDK components"
+
+          test -d "$ANDROID_HOME/platform-tools"
+          test -d "$ANDROID_HOME/platforms/android-33"
+          test -d "$ANDROID_HOME/platforms/android-34"
+          test -d "$ANDROID_HOME/build-tools/33.0.2"
+          test -d "$ANDROID_HOME/build-tools/34.0.0"
+          test -d "$ANDROID_HOME/ndk/23.2.8568313"
+          test -d "$ANDROID_HOME/cmake/3.10.2.4988404"
+
+      - name: Configure Java and Debug Keystore
+        run: |
+          set -e
+
+          JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+          echo "JAVA_HOME=$JAVA_HOME"
+
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$JAVA_HOME/bin/keytool"
+
+          mkdir -p /root/.config/godot
+
+          if [ ! -f /root/debug.keystore ]; then
+            "$JAVA_HOME/bin/keytool" -genkeypair \
+              -keystore /root/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          cat > /root/.config/godot/editor_settings-4.3.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/ndk_path = "/usr/lib/android-sdk/ndk/23.2.8568313"
+          export/android/cmake_path = "/usr/lib/android-sdk/cmake/3.10.2.4988404"
+          export/android/debug_keystore = "/root/debug.keystore"
+          EOF
+
+      - name: Create Android Export Preset
+        run: |
+          cat > game/export_presets.cfg <<'EOF'
+          [preset.0]
+          name="Android"
+          platform="Android"
+          runnable=true
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+
+          [preset.0.options]
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          version/code=1
+          version/name="1.0"
+          package/unique_name="com.boundarycricket.game"
+          package/name="Boundary Cricket"
+          package/signed=true
+          keystore/debug="/root/debug.keystore"
+          keystore/debug_user="androiddebugkey"
+          keystore/debug_password="android"
+          screen/immersive_mode=true
+          package/short_name="Boundary Cricket"
+          package/signed=true
+          package/retain_data_on_uninstall=false
+          package/exclude_from_recents=false
+          package/show_in_android_tv=false
+          package/show_in_app_library=true
+          architectures/x86=false
+          architectures/x86_64=false
+          EOF
+
+      - name: Check Godot Export Templates
+        run: |
+          set -e
+
+          echo "Checking Godot version"
+          godot --version
+
+          echo "Checking Android export templates"
+
+          TEMPLATE_DIR="/root/.local/share/godot/export_templates/4.3.stable"
+
+          if [ ! -d "$TEMPLATE_DIR" ]; then
+            echo "Android export template directory not found"
+            find /root/.local/share/godot -maxdepth 4 -type f | head -n 30 || true
+            exit 1
+          fi
+
+          find "$TEMPLATE_DIR" -maxdepth 1 -type f
+
+      - name: Import Godot Project
+        run: |
+          set -e
+
+          godot --headless --editor --path game --quit
+
+      - name: Build Android APK
+        run: |
+          set -e
+
+          mkdir -p game/build
+
+          godot --headless --verbose --path game \
+            --export-debug "Android" game/build/BoundaryCricket.apk
+
+          test -s game/build/BoundaryCricket.apk
+
+          echo "APK BUILD SUCCESSFUL"
+          ls -lh game/build/BoundaryCricket.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Boundary-Cricket-APK
+          path: game/build/BoundaryCricket.apk
+          if-no-files-found: error
+          
+ game/project.godot || sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' game/project.godot
+          else
+            printf '\n[rendering]\ntextures/vram_compression/import_etc2_astc=true\n' >> game/project.godot
+          fi
+
+          echo "Project files:"
+          find game -maxdepth 4 -type f | sort | head -n 200
+          echo "Main scene setting:"
+          grep -n '^run/main_scene=' game/project.godot || true
 
 
       - name: Configure Android SDK
