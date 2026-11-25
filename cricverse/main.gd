@@ -179,7 +179,7 @@ func _play_shot(power: float) -> void:
 	if not delivery_active or hit_done or not is_instance_valid(ball):
 		_show_status("Tap BOWL first")
 		return
-	var timing := abs(ball.position.z - 5.6)
+	var timing: float = absf(ball.position.z - 5.6)
 	hit_done = true
 	if timing < 1.8:
 		var runs := 0
