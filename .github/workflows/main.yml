@@ -160,11 +160,20 @@ jobs:
           fi
           find "$TEMPLATE_DIR" -maxdepth 1 -type f -print
 
-      - name: Import Godot project
+      - name: Validate Godot project and scripts
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --editor --path game --quit
+          godot --headless --editor --path game --quit 2>&1 | tee game/import.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" game/import.log; then
+            echo "ERROR: Godot script validation failed"
+            exit 1
+          fi
+          godot --headless --path game --quit-after 3 2>&1 | tee game/runtime.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" game/runtime.log; then
+            echo "ERROR: Main scene failed to run"
+            exit 1
+          fi
 
       - name: Build Android APK
         shell: bash
