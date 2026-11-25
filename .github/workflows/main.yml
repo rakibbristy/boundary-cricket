@@ -148,6 +148,14 @@ jobs:
           keystore/debug_user="androiddebugkey"
           keystore/debug_password="android"
           screen/immersive_mode=true
+          package/short_name="Boundary Cricket"
+          package/signed=true
+          package/retain_data_on_uninstall=false
+          package/exclude_from_recents=false
+          package/show_in_android_tv=false
+          package/show_in_app_library=true
+          architectures/x86=false
+          architectures/x86_64=false
           EOF
 
       - name: Check Godot Export Templates
