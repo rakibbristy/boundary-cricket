@@ -140,11 +140,37 @@ func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, color
 	mesh.height = height
 	return _part(parent, mesh, pos, color)
 
+func _load_rigged_character(asset_path: String, parent: Node3D) -> bool:
+	if not ResourceLoader.exists(asset_path):
+		return false
+	var packed_scene := load(asset_path) as PackedScene
+	if packed_scene == null:
+		push_warning("Character asset could not be loaded: " + asset_path)
+		return false
+	var model := packed_scene.instantiate() as Node3D
+	if model == null:
+		push_warning("Character asset root must be Node3D: " + asset_path)
+		return false
+	parent.add_child(model)
+	model.position = Vector3.ZERO
+	for player_node in model.find_children("*", "AnimationPlayer", true, false):
+		var animation_player := player_node as AnimationPlayer
+		var clips := animation_player.get_animation_list()
+		for preferred in ["Idle", "idle", "Armature|Idle", "mixamo.com"]:
+			if clips.has(preferred):
+				animation_player.play(preferred)
+				return true
+		if clips.size() > 0:
+			animation_player.play(clips[0])
+	return true
+
 func make_batter() -> void:
 	batter = Node3D.new()
 	batter.name = "Batter_3D"
 	batter.position = Vector3(0.75, 0, 7.2)
 	add_child(batter)
+	if _load_rigged_character("res://assets/players/batter.glb", batter):
+		return
 	var skin := Color(0.62, 0.38, 0.25)
 	var shirt := Color(0.08, 0.22, 0.72)
 	var trousers := Color(0.88, 0.89, 0.92)
@@ -175,6 +201,13 @@ func make_bowler() -> void:
 	bowler.name = "Bowler_3D"
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
+	if _load_rigged_character("res://assets/players/bowler.glb", bowler):
+		_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
+		_add_stadium()
+		return
 	var skin := Color(0.55, 0.32, 0.22)
 	_capsule(bowler, Vector3(0, 1.2, 0), 0.27, 0.9, Color(0.82, 0.12, 0.1))
 	_sphere(bowler, Vector3(0, 1.88, 0), 0.21, skin)
@@ -194,6 +227,8 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	var fielder := Node3D.new()
 	fielder.position = pos
 	add_child(fielder)
+	if _load_rigged_character("res://assets/players/fielder.glb", fielder):
+		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
 	_sphere(fielder, Vector3(0, 1.52, 0), 0.16, Color(0.55, 0.34, 0.23))
 	_capsule(fielder, Vector3(-0.12, 0.42, 0), 0.065, 0.65, Color(0.12, 0.12, 0.15))
