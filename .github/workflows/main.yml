@@ -45,6 +45,10 @@ jobs:
 
           cp -a "$PROJECT_DIR"/. game/
 
+          # Enable Android-compatible ETC2/ASTC texture import.
+          python3 -c 'from pathlib import Path; p=Path("game/project.godot"); s=p.read_text(); k="textures/vram_compression/import_etc2_astc=true"; s=s if k in s else (s.replace("[rendering]", "[rendering]\n"+k, 1) if "[rendering]" in s else s+"\n[rendering]\n"+k+"\n"); p.write_text(s)'
+
+
       - name: Configure Android SDK
         run: |
           set -e
