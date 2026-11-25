@@ -62,7 +62,9 @@ jobs:
 
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
+            "platforms;android-33" \
             "platforms;android-34" \
+            "build-tools;33.0.2" \
             "build-tools;34.0.0" \
             "cmdline-tools;latest" \
             "ndk;23.2.8568313" \
@@ -71,7 +73,9 @@ jobs:
           echo "Checking Android SDK components"
 
           test -d "$ANDROID_HOME/platform-tools"
+          test -d "$ANDROID_HOME/platforms/android-33"
           test -d "$ANDROID_HOME/platforms/android-34"
+          test -d "$ANDROID_HOME/build-tools/33.0.2"
           test -d "$ANDROID_HOME/build-tools/34.0.0"
           test -d "$ANDROID_HOME/ndk/23.2.8568313"
           test -d "$ANDROID_HOME/cmake/3.10.2.4988404"
