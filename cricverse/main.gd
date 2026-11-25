@@ -544,6 +544,13 @@ func _process(delta: float) -> void:
 		run_timer += delta
 		if run_timer >= 1.05:
 			run_in_progress = false
+			if randf() < 0.07:
+				wickets += 1
+				_show_status("RUN OUT! Batter did not reach the crease")
+				if is_instance_valid(run_button):
+					run_button.disabled = true
+				_finish_delivery()
+				return
 			completed_runs_this_ball += 1
 			score += 1
 			_update_score()
@@ -596,6 +603,9 @@ func _process(delta: float) -> void:
 		if not shot_boundary_done and (absf(ball.position.x) >= 15.9 or absf(ball.position.z) >= 19.9):
 			shot_boundary_done = true
 			run_in_progress = false
+			# Boundary replaces any runs attempted on the same delivery.
+			score = maxi(0, score - completed_runs_this_ball)
+			completed_runs_this_ball = 0
 			var is_six: bool = ball.position.y > 1.05
 			var boundary_runs: int = 6 if is_six else 4
 			score += boundary_runs
