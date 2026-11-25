@@ -64,36 +64,114 @@ func _make_box(label: String, pos: Vector3, size: Vector3, color: Color) -> Mesh
 	add_child(node)
 	return node
 
+func _mat(color: Color, metallic: float = 0.0, roughness: float = 0.8) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.metallic = metallic
+	material.roughness = roughness
+	return material
+
+func _part(parent: Node3D, mesh: Mesh, pos: Vector3, color: Color, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.position = pos
+	node.rotation_degrees = rot
+	node.material_override = _mat(color)
+	parent.add_child(node)
+	return node
+
+func _sphere(parent: Node3D, pos: Vector3, radius: float, color: Color) -> MeshInstance3D:
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	return _part(parent, mesh, pos, color)
+
+func _capsule(parent: Node3D, pos: Vector3, radius: float, height: float, color: Color, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var mesh := CapsuleMesh.new()
+	mesh.radius = radius
+	mesh.height = height
+	return _part(parent, mesh, pos, color, rot)
+
+func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, color: Color) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
+	return _part(parent, mesh, pos, color)
+
 func make_batter() -> void:
 	batter = Node3D.new()
+	batter.name = "Batter_3D"
 	batter.position = Vector3(0.75, 0, 7.2)
 	add_child(batter)
-	_make_character_part(batter, Vector3(0, 1.0, 0), Vector3(0.55, 0.85, 0.32), Color(0.12, 0.25, 0.78))
-	_make_character_part(batter, Vector3(0, 1.72, 0), Vector3(0.42, 0.42, 0.38), Color(0.72, 0.48, 0.32))
-	_make_character_part(batter, Vector3(0.36, 0.88, -0.08), Vector3(0.12, 0.85, 0.12), Color(0.78, 0.78, 0.8))
-	_make_character_part(batter, Vector3(-0.25, 0.88, 0.08), Vector3(0.12, 0.85, 0.12), Color(0.78, 0.78, 0.8))
-	_make_character_part(batter, Vector3(0.42, 0.93, -0.48), Vector3(0.13, 0.85, 0.13), Color(0.72, 0.48, 0.32))
-	_make_character_part(batter, Vector3(0.52, 0.58, -0.8), Vector3(0.16, 1.15, 0.12), Color(0.72, 0.48, 0.32))
-
-func _make_character_part(parent: Node3D, pos: Vector3, size: Vector3, color: Color) -> void:
-	var m := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	m.mesh = box
-	m.position = pos
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	m.material_override = mat
-	parent.add_child(m)
+	var skin := Color(0.62, 0.38, 0.25)
+	var shirt := Color(0.08, 0.22, 0.72)
+	var trousers := Color(0.88, 0.89, 0.92)
+	# torso, neck and detailed head
+	_capsule(batter, Vector3(0, 1.18, 0), 0.29, 0.92, shirt)
+	_cylinder(batter, Vector3(0, 1.68, 0), 0.09, 0.16, skin)
+	_sphere(batter, Vector3(0, 1.91, 0), 0.22, skin)
+	# helmet shell and face grille
+	_sphere(batter, Vector3(0, 2.04, -0.015), 0.235, Color(0.04, 0.08, 0.16))
+	_capsule(batter, Vector3(0.17, 1.91, -0.13), 0.018, 0.28, Color(0.78, 0.82, 0.88), Vector3(0, 0, 90))
+	# legs and white pads
+	_capsule(batter, Vector3(-0.16, 0.52, 0.02), 0.105, 0.82, trousers, Vector3(0, 0, -5))
+	_capsule(batter, Vector3(0.16, 0.52, 0.02), 0.105, 0.82, trousers, Vector3(0, 0, 5))
+	_capsule(batter, Vector3(-0.16, 0.55, -0.105), 0.115, 0.52, Color(0.96, 0.96, 0.94))
+	_capsule(batter, Vector3(0.16, 0.55, -0.105), 0.115, 0.52, Color(0.96, 0.96, 0.94))
+	# arms, gloves and bat
+	_capsule(batter, Vector3(-0.34, 1.32, -0.02), 0.09, 0.58, shirt, Vector3(0, 0, -25))
+	_capsule(batter, Vector3(0.34, 1.32, -0.06), 0.09, 0.58, shirt, Vector3(0, 0, 25))
+	_sphere(batter, Vector3(0.43, 1.06, -0.22), 0.105, Color(0.94, 0.94, 0.88))
+	_sphere(batter, Vector3(0.34, 1.12, -0.35), 0.09, Color(0.94, 0.94, 0.88))
+	_capsule(batter, Vector3(0.48, 0.69, -0.62), 0.055, 1.0, Color(0.72, 0.48, 0.22), Vector3(0, 0, -12))
+	_make_box("Bat_Blade", Vector3(0, 0, 0), Vector3(0.18, 0.72, 0.055), Color(0.86, 0.68, 0.39)).reparent(batter)
+	batter.get_node("Bat_Blade").position = Vector3(0.48, 0.32, -0.62)
+	batter.get_node("Bat_Blade").rotation_degrees = Vector3(0, 0, -12)
 
 func make_bowler() -> void:
 	var bowler := Node3D.new()
+	bowler.name = "Bowler_3D"
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
-	_make_character_part(bowler, Vector3(0, 1.0, 0), Vector3(0.52, 0.9, 0.32), Color(0.82, 0.18, 0.12))
-	_make_character_part(bowler, Vector3(0, 1.72, 0), Vector3(0.4, 0.4, 0.38), Color(0.65, 0.42, 0.28))
-	_make_character_part(bowler, Vector3(-0.2, 0.42, 0), Vector3(0.13, 0.8, 0.13), Color(0.15, 0.15, 0.18))
-	_make_character_part(bowler, Vector3(0.2, 0.42, 0), Vector3(0.13, 0.8, 0.13), Color(0.15, 0.15, 0.18))
+	var skin := Color(0.55, 0.32, 0.22)
+	_capsule(bowler, Vector3(0, 1.2, 0), 0.27, 0.9, Color(0.82, 0.12, 0.1))
+	_sphere(bowler, Vector3(0, 1.88, 0), 0.21, skin)
+	_sphere(bowler, Vector3(0, 2.0, 0), 0.22, Color(0.12, 0.12, 0.14))
+	_capsule(bowler, Vector3(-0.16, 0.48, 0), 0.09, 0.85, Color(0.08, 0.08, 0.1), Vector3(0, 0, -4))
+	_capsule(bowler, Vector3(0.16, 0.48, 0), 0.09, 0.85, Color(0.08, 0.08, 0.1), Vector3(0, 0, 4))
+	_capsule(bowler, Vector3(-0.34, 1.4, 0), 0.075, 0.62, Color(0.82, 0.12, 0.1), Vector3(0, 0, -25))
+	_capsule(bowler, Vector3(0.34, 1.46, -0.1), 0.075, 0.68, Color(0.82, 0.12, 0.1), Vector3(0, 0, 25))
+	_sphere(bowler, Vector3(0.48, 1.72, -0.26), 0.075, skin)
+	_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
+	_add_stadium()
+
+func _add_fielder(pos: Vector3, shirt: Color) -> void:
+	var fielder := Node3D.new()
+	fielder.position = pos
+	add_child(fielder)
+	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
+	_sphere(fielder, Vector3(0, 1.52, 0), 0.16, Color(0.55, 0.34, 0.23))
+	_capsule(fielder, Vector3(-0.12, 0.42, 0), 0.065, 0.65, Color(0.12, 0.12, 0.15))
+	_capsule(fielder, Vector3(0.12, 0.42, 0), 0.065, 0.65, Color(0.12, 0.12, 0.15))
+	_capsule(fielder, Vector3(-0.25, 1.0, 0), 0.055, 0.48, shirt, Vector3(0, 0, -20))
+	_capsule(fielder, Vector3(0.25, 1.0, 0), 0.055, 0.48, shirt, Vector3(0, 0, 20))
+
+func _add_stadium() -> void:
+	# Curved-feel seating banks, boundary boards and floodlight towers
+	for side in [-1, 1]:
+		_make_box("Stand_Base", Vector3(side * 15.0, 1.2, 0), Vector3(2.2, 2.4, 35), Color(0.12, 0.16, 0.24))
+		for row in range(4):
+			_make_box("Stand_Seat", Vector3(side * (14.0 + row * 0.45), 2.1 + row * 0.55, 0), Vector3(1.2, 0.22, 34), [Color(0.12,0.32,0.72), Color(0.9,0.2,0.16), Color(0.92,0.78,0.18), Color(0.12,0.55,0.32)][row])
+	for x in [-14.5, 14.5]:
+		for z in [-15, 15]:
+			_make_box("Floodlight_Pole", Vector3(x, 8, z), Vector3(0.22, 16, 0.22), Color(0.38, 0.42, 0.48))
+			_make_box("Floodlight_Array", Vector3(x, 16.1, z), Vector3(1.8, 0.45, 0.8), Color(0.92, 0.95, 1.0))
+	for z in [-19.5, 19.5]:
+		_make_box("Boundary_Board", Vector3(0, 0.42, z), Vector3(30, 0.8, 0.25), Color(0.04, 0.25, 0.38))
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
