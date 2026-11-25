@@ -664,6 +664,22 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! Dot ball.")
 		_update_score()
 
+	# Fielders sprint toward the ball; airborne close contact can produce a catch.
+	if ball_state == "shot" and is_instance_valid(ball):
+		for fielder in fielder_nodes:
+			if not is_instance_valid(fielder):
+				continue
+			var target := Vector3(ball.position.x, 0.0, ball.position.z)
+			var offset := target - fielder.position
+			offset.y = 0.0
+			if offset.length() > 0.55:
+				fielder.position += offset.normalized() * minf(5.0 * delta, offset.length() - 0.45)
+			if ball.position.y > 1.15 and ball.position.y < 3.8 and fielder.position.distance_to(Vector3(ball.position.x, 0.0, ball.position.z)) < 0.8:
+				wickets += 1
+				_show_status("CAUGHT! Fielder completed the catch")
+				_finish_delivery()
+				return
+
 	# Hit ball: one ground contact, then controlled roll.
 	if ball_state == "shot":
 		if ball.position.y <= 0.14:
