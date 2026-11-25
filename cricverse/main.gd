@@ -184,7 +184,7 @@ func _add_stadium() -> void:
 	for side in [-1, 1]:
 		_make_box("Stand_Base", Vector3(side * 16.0, 1.25, 0), Vector3(3.0, 2.5, 37), Color(0.055, 0.075, 0.13))
 		for row in range(5):
-			var seat_color := [Color(0.08, 0.27, 0.62), Color(0.78, 0.13, 0.16), Color(0.91, 0.68, 0.12), Color(0.08, 0.48, 0.32), Color(0.18, 0.22, 0.34)][row]
+			var seat_color: Color = [Color(0.08, 0.27, 0.62), Color(0.78, 0.13, 0.16), Color(0.91, 0.68, 0.12), Color(0.08, 0.48, 0.32), Color(0.18, 0.22, 0.34)][row]
 			_make_box("Stand_Tier", Vector3(side * (14.1 + row * 0.55), 2.15 + row * 0.48, 0), Vector3(1.0, 0.20, 35), seat_color)
 			for seat in range(22):
 				var zpos := -16.2 + seat * 1.52
