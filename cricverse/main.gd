@@ -45,13 +45,22 @@ func _build_world() -> void:
 	sun.light_energy = 1.25
 	add_child(sun)
 
-	_make_box("Ground", Vector3(0, -0.35, 0), Vector3(32, 0.5, 44), Color(0.12, 0.38, 0.19))
-	_make_box("Pitch", Vector3(0, -0.04, 0), Vector3(3.2, 0.12, 22), Color(0.67, 0.48, 0.29))
+	_make_box("Ground", Vector3(0, -0.35, 0), Vector3(32, 0.5, 44), Color(0.10, 0.34, 0.16))
+	# Alternating mowing bands give the outfield depth without heavy textures.
+	for i in range(8):
+		var stripe_color := Color(0.13, 0.39, 0.19) if i % 2 == 0 else Color(0.10, 0.32, 0.15)
+		_make_box("Mowing_Stripe", Vector3(-13.8 + i * 3.95, -0.085, 0), Vector3(3.9, 0.025, 42.5), stripe_color)
+	_make_box("Pitch", Vector3(0, -0.04, 0), Vector3(3.2, 0.12, 22), Color(0.61, 0.42, 0.25))
+	_make_box("Pitch_Centre", Vector3(0, 0.025, 0), Vector3(2.75, 0.025, 20.5), Color(0.72, 0.55, 0.35))
 	for z in [-8.8, 8.8]:
-		_make_box("Crease", Vector3(0, 0.04, z), Vector3(3.4, 0.035, 0.12), Color.WHITE)
+		_make_box("Crease", Vector3(0, 0.07, z), Vector3(3.7, 0.035, 0.12), Color(0.96, 0.94, 0.83))
+		_make_box("Return_Crease_L", Vector3(-1.55, 0.07, z), Vector3(0.10, 0.035, 1.25), Color(0.96, 0.94, 0.83))
+		_make_box("Return_Crease_R", Vector3(1.55, 0.07, z), Vector3(0.10, 0.035, 1.25), Color(0.96, 0.94, 0.83))
 		for x in [-0.35, 0, 0.35]:
-			_make_box("Stump", Vector3(x, 0.55, z), Vector3(0.09, 1.05, 0.09), Color(0.92, 0.86, 0.68))
+			_make_box("Stump", Vector3(x, 0.55, z), Vector3(0.075, 1.05, 0.075), Color(0.94, 0.87, 0.69))
+		_make_box("Bail", Vector3(0, 1.10, z), Vector3(0.82, 0.055, 0.075), Color(0.98, 0.91, 0.73))
 	_make_box("Boundary North", Vector3(0, 0.05, -20), Vector3(32, 0.1, 0.18), Color.WHITE)
+	_make_box("Boundary South", Vector3(0, 0.05, 20), Vector3(32, 0.1, 0.18), Color.WHITE)
 	make_batter()
 	make_bowler()
 	camera = Camera3D.new()
@@ -170,18 +179,41 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	_capsule(fielder, Vector3(0.25, 1.0, 0), 0.055, 0.48, shirt, Vector3(0, 0, 20))
 
 func _add_stadium() -> void:
-	# Curved-feel seating banks, boundary boards and floodlight towers
+	# Four-sided stadium bowl with tiered seating and original team-colour crowd.
+	var crowd_colors := [Color(0.92, 0.92, 0.96), Color(0.95, 0.28, 0.16), Color(0.12, 0.48, 0.88), Color(0.96, 0.72, 0.12), Color(0.12, 0.68, 0.40)]
 	for side in [-1, 1]:
-		_make_box("Stand_Base", Vector3(side * 15.0, 1.2, 0), Vector3(2.2, 2.4, 35), Color(0.12, 0.16, 0.24))
+		_make_box("Stand_Base", Vector3(side * 16.0, 1.25, 0), Vector3(3.0, 2.5, 37), Color(0.055, 0.075, 0.13))
+		for row in range(5):
+			var seat_color := [Color(0.08, 0.27, 0.62), Color(0.78, 0.13, 0.16), Color(0.91, 0.68, 0.12), Color(0.08, 0.48, 0.32), Color(0.18, 0.22, 0.34)][row]
+			_make_box("Stand_Tier", Vector3(side * (14.1 + row * 0.55), 2.15 + row * 0.48, 0), Vector3(1.0, 0.20, 35), seat_color)
+			for seat in range(22):
+				var zpos := -16.2 + seat * 1.52
+				var person := _sphere(self, Vector3(side * (14.0 + row * 0.55), 2.48 + row * 0.48, zpos), 0.13, crowd_colors[(seat + row * 3) % crowd_colors.size()])
+				person.scale = Vector3(0.82, 1.15, 0.82)
+	# End stands frame the far side of the ground.
+	for end_sign in [-1, 1]:
+		_make_box("End_Stand", Vector3(0, 1.1, end_sign * 22.0), Vector3(29, 2.2, 2.0), Color(0.055, 0.075, 0.13))
 		for row in range(4):
-			_make_box("Stand_Seat", Vector3(side * (14.0 + row * 0.45), 2.1 + row * 0.55, 0), Vector3(1.2, 0.22, 34), [Color(0.12,0.32,0.72), Color(0.9,0.2,0.16), Color(0.92,0.78,0.18), Color(0.12,0.55,0.32)][row])
+			_make_box("End_Seat_Tier", Vector3(0, 2.0 + row * 0.48, end_sign * (20.9 + row * 0.42)), Vector3(27, 0.20, 0.8), crowd_colors[row])
+			for seat in range(18):
+				_sphere(self, Vector3(-12.5 + seat * 1.45, 2.35 + row * 0.48, end_sign * (20.7 + row * 0.42)), 0.12, crowd_colors[(seat + row) % crowd_colors.size()])
+	# Floodlight towers now cast actual light onto the field.
 	for x in [-14.5, 14.5]:
 		for z in [-15, 15]:
-			_make_box("Floodlight_Pole", Vector3(x, 8, z), Vector3(0.22, 16, 0.22), Color(0.38, 0.42, 0.48))
-			_make_box("Floodlight_Array", Vector3(x, 16.1, z), Vector3(1.8, 0.45, 0.8), Color(0.92, 0.95, 1.0))
+			_make_box("Floodlight_Pole", Vector3(x, 8, z), Vector3(0.22, 16, 0.22), Color(0.34, 0.39, 0.48))
+			_make_box("Floodlight_Array", Vector3(x, 16.1, z), Vector3(1.8, 0.45, 0.8), Color(0.94, 0.97, 1.0))
+			var lamp := OmniLight3D.new()
+			lamp.position = Vector3(x * 0.82, 14.8, z * 0.82)
+			lamp.light_color = Color(0.78, 0.86, 1.0)
+			lamp.light_energy = 1.4
+			lamp.omni_range = 23.0
+			lamp.omni_attenuation = 1.4
+			add_child(lamp)
+	# Sponsor-style boundary fascia with contrasting panels.
 	for z in [-19.5, 19.5]:
-		_make_box("Boundary_Board", Vector3(0, 0.42, z), Vector3(30, 0.8, 0.25), Color(0.04, 0.25, 0.38))
-
+		_make_box("Boundary_Board", Vector3(0, 0.42, z), Vector3(30, 0.8, 0.25), Color(0.025, 0.12, 0.22))
+		for i in range(6):
+			_make_box("Boundary_Panel", Vector3(-12.5 + i * 5.0, 0.44, z - 0.14), Vector3(4.7, 0.58, 0.035), [Color(0.02,0.48,0.72), Color(0.82,0.12,0.16), Color(0.08,0.48,0.30)][i % 3])
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
