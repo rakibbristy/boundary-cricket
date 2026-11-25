@@ -31,6 +31,10 @@ var run_timer := 0.0
 var completed_runs_this_ball := 0
 var shot_boundary_done := false
 var fielder_nodes: Array[Node3D] = []
+var active_fielder: Node3D = null
+var fielder_chasing := false
+var delivery_full_toss := false
+var delivery_bounced := false
 var run_start_z := 7.2
 var run_target_z := -7.2
 const RUN_DURATION := 2.6
@@ -61,7 +65,17 @@ func _build_world() -> void:
 	sun.directional_shadow_max_distance = 48.0
 	add_child(sun)
 
-	var ground := _make_box("Ground", Vector3(0, -0.35, 0), Vector3(32, 0.5, 44), Color(0.10, 0.34, 0.16))
+	var ground_mesh := CylinderMesh.new()
+	ground_mesh.top_radius = 1.0
+	ground_mesh.bottom_radius = 1.0
+	ground_mesh.height = 0.5
+	ground_mesh.radial_segments = 96
+	var ground := MeshInstance3D.new()
+	ground.name = "Oval_Ground"
+	ground.mesh = ground_mesh
+	ground.scale = Vector3(16.0, 1.0, 22.0)
+	ground.position = Vector3(0, -0.35, 0)
+	add_child(ground)
 	ground.material_override = _surface_material(Color(0.13, 0.34, 0.12), 0.18, 18.0)
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Alternating mowing bands give the outfield depth without heavy textures.
@@ -79,8 +93,7 @@ func _build_world() -> void:
 		for x in [-0.35, 0, 0.35]:
 			_make_box("Stump", Vector3(x, 0.55, z), Vector3(0.075, 1.05, 0.075), Color(0.94, 0.87, 0.69))
 		_make_box("Bail", Vector3(0, 1.10, z), Vector3(0.82, 0.055, 0.075), Color(0.98, 0.91, 0.73))
-	_make_box("Boundary North", Vector3(0, 0.05, -20), Vector3(32, 0.1, 0.18), Color.WHITE)
-	_make_box("Boundary South", Vector3(0, 0.05, 20), Vector3(32, 0.1, 0.18), Color.WHITE)
+	_add_oval_boundary()
 	_build_stadium()
 	make_batter()
 	make_bowler()
@@ -92,22 +105,23 @@ func _build_world() -> void:
 
 
 func _build_stadium() -> void:
-	# Original compact stadium environment: tiered stands, crowd silhouettes and floodlights.
-	for side_value in [-1.0, 1.0]:
-		var side: float = float(side_value)
-		for tier in range(4):
-			var x: float = side * (18.0 + float(tier) * 0.72)
-			var y: float = 0.75 + float(tier) * 0.72
-			var stand_color := Color(0.10, 0.16, 0.27) if tier % 2 == 0 else Color(0.15, 0.22, 0.34)
-			_make_box("Grandstand_Tier", Vector3(x, y, 0), Vector3(1.35, 0.62, 39.0), stand_color)
-			_make_box("Stand_Front_Rail", Vector3(side * (17.25 + tier * 0.72), y + 0.38, 0), Vector3(0.08, 0.12, 39.0), Color(0.72, 0.78, 0.86))
-		_make_box("Stand_Roof", Vector3(side * 20.6, 4.1, 0), Vector3(0.28, 0.22, 40.0), Color(0.07, 0.10, 0.16))
-	# Floodlight masts with bright lamps at all four corners.
+	# Curved oval seating bowl made from individually angled stand sections.
+	for tier in range(4):
+		var rx: float = 18.2 + float(tier) * 1.15
+		var rz: float = 24.0 + float(tier) * 1.15
+		var y: float = 0.8 + float(tier) * 0.72
+		var tier_color: Color = Color(0.07, 0.13, 0.24) if tier % 2 == 0 else Color(0.12, 0.19, 0.31)
+		for segment in range(48):
+			var angle: float = TAU * float(segment) / 48.0
+			var pos := Vector3(cos(angle) * rx, y, sin(angle) * rz)
+			var stand := _make_box("Curved_Grandstand", pos, Vector3(3.1, 0.62, 3.4), tier_color)
+			stand.rotation.y = -angle
+	# Four light towers outside the oval.
 	for sx_value in [-1.0, 1.0]:
-		var sx: float = float(sx_value)
 		for sz_value in [-1.0, 1.0]:
+			var sx: float = float(sx_value)
 			var sz: float = float(sz_value)
-			var mast_pos := Vector3(sx * 20.5, 7.0, sz * 17.0)
+			var mast_pos := Vector3(sx * 20.5, 7.0, sz * 25.0)
 			var mast := _make_box("Floodlight_Mast", mast_pos, Vector3(0.22, 14.0, 0.22), Color(0.48, 0.54, 0.62))
 			mast.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_make_box("Floodlight_Bank", mast_pos + Vector3(0, 6.9, 0), Vector3(1.8, 0.45, 0.65), Color(0.92, 0.94, 1.0))
@@ -118,11 +132,20 @@ func _build_stadium() -> void:
 			lamp.omni_range = 28.0
 			lamp.shadow_enabled = false
 			add_child(lamp)
-	# Advertising boards around the playing area.
-	for z_value in [-18.9, 18.9]:
-		var z: float = float(z_value)
-		_make_box("Sponsor_Board", Vector3(0, 0.48, z), Vector3(27.0, 0.85, 0.18), Color(0.035, 0.12, 0.20))
-		_make_box("Sponsor_Board_Trim", Vector3(0, 0.94, z), Vector3(27.0, 0.06, 0.20), Color(0.12, 0.76, 0.82))
+
+func _add_oval_boundary() -> void:
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.985
+	ring.outer_radius = 1.0
+	ring.rings = 96
+	ring.ring_segments = 12
+	var line := MeshInstance3D.new()
+	line.name = "Oval_Boundary_Rope"
+	line.mesh = ring
+	line.scale = Vector3(15.7, 0.12, 21.0)
+	line.position.y = 0.07
+	line.material_override = _mat(Color(0.96, 0.96, 0.88))
+	add_child(line)
 
 func _make_box(label: String, pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
@@ -255,7 +278,6 @@ func make_bowler() -> void:
 		_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
-		_add_stadium()
 		return
 	var skin := Color(0.55, 0.32, 0.22)
 	_capsule(bowler, Vector3(0, 1.2, 0), 0.27, 0.9, Color(0.82, 0.12, 0.1))
@@ -270,7 +292,6 @@ func make_bowler() -> void:
 	_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
 	_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
 	_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
-	_add_stadium()
 
 func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	var fielder := Node3D.new()
@@ -526,11 +547,15 @@ func _spawn_ball() -> void:
 	glow.light_energy = 0.12
 	glow.omni_range = 0.7
 	ball.add_child(glow)
-	ball.position = Vector3(randf_range(-0.28, 0.28), 1.15, -8.2)
+	delivery_full_toss = randf() < 0.18
+	delivery_bounced = false
+	ball.position = Vector3(randf_range(-0.12, 0.12), 2.0, -8.2)
 	add_child(ball)
-	ball_velocity = Vector3(randf_range(-0.10, 0.10), -0.15, 7.4)
+	ball_velocity = Vector3(randf_range(-0.12, 0.12), 4.8 if delivery_full_toss else -0.8, 12.4)
 	ball_state = "delivery"
 	ball_bounced = false
+	active_fielder = null
+	fielder_chasing = false
 	delivery_timer = 0.0
 	completed_runs_this_ball = 0
 	shot_boundary_done = false
@@ -630,12 +655,14 @@ func _process(delta: float) -> void:
 				run_button.disabled = false
 			_show_status("SAFE! %d run(s) completed — press RUN again" % completed_runs_this_ball)
 
-	# One controlled pitch bounce, followed by a low skidding delivery.
-	if ball_state == "delivery" and not ball_bounced and ball.position.y <= 0.16 and ball.position.z > -5.2:
+	# Bowling trajectory: most deliveries pitch once, occasional full tosses do not.
+	if ball_state == "delivery" and not delivery_full_toss and not delivery_bounced and ball.position.z >= -1.4 and ball.position.y <= 0.22:
 		ball.position.y = 0.16
-		ball_velocity.y = 3.15
+		ball_velocity.y = 3.35
+		ball_velocity.z *= 0.94
+		delivery_bounced = true
 		ball_bounced = true
-	elif ball_state == "delivery" and ball_bounced and ball.position.y < 0.13:
+	elif ball_state == "delivery" and delivery_bounced and ball.position.y <= 0.13 and ball_velocity.y < 0.0:
 		ball.position.y = 0.13
 		ball_velocity.y = 0.0
 
@@ -664,21 +691,37 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! Dot ball.")
 		_update_score()
 
-	# Fielders sprint toward the ball; airborne close contact can produce a catch.
-	if ball_state == "shot" and is_instance_valid(ball):
-		for fielder in fielder_nodes:
-			if not is_instance_valid(fielder):
-				continue
+	# Select one nearest fielder per shot. Others hold their positions to prevent crowding.
+	if ball_state == "shot" and is_instance_valid(ball) and not shot_boundary_done:
+		if not fielder_chasing and fielder_nodes.size() > 0:
+			var nearest_distance: float = INF
+			for candidate in fielder_nodes:
+				if not is_instance_valid(candidate):
+					continue
+				var d: float = Vector2(candidate.position.x - ball.position.x, candidate.position.z - ball.position.z).length()
+				if d < nearest_distance:
+					nearest_distance = d
+					active_fielder = candidate
+			fielder_chasing = active_fielder != null
+		if is_instance_valid(active_fielder):
 			var target := Vector3(ball.position.x, 0.0, ball.position.z)
-			var offset := target - fielder.position
-			offset.y = 0.0
-			if offset.length() > 0.55:
-				fielder.position += offset.normalized() * minf(5.0 * delta, offset.length() - 0.45)
-			if ball.position.y > 1.15 and ball.position.y < 3.8 and fielder.position.distance_to(Vector3(ball.position.x, 0.0, ball.position.z)) < 0.8:
+			var to_ball := target - active_fielder.position
+			to_ball.y = 0.0
+			var distance_to_ball: float = to_ball.length()
+			if distance_to_ball > 0.7:
+				var step: float = minf(6.2 * delta, distance_to_ball - 0.62)
+				active_fielder.position += to_ball.normalized() * step
+				active_fielder.rotation.y = atan2(to_ball.x, to_ball.z)
+			elif ball.position.y > 1.1 and ball.position.y < 3.4 and ball_velocity.y < 0.0:
 				wickets += 1
 				_show_status("CAUGHT! Fielder completed the catch")
 				_finish_delivery()
 				return
+			elif ball.position.y <= 0.25:
+				ball.position.x = active_fielder.position.x
+				ball.position.z = active_fielder.position.z
+				ball_velocity = Vector3.ZERO
+				_show_status("FIELDING! Ball stopped by fielder")
 
 	# Hit ball: one ground contact, then controlled roll.
 	if ball_state == "shot":
@@ -688,7 +731,7 @@ func _process(delta: float) -> void:
 				ball_velocity.y = 0.0
 			ball_velocity.x *= 0.992
 			ball_velocity.z *= 0.992
-		if not shot_boundary_done and (absf(ball.position.x) >= 15.9 or absf(ball.position.z) >= 19.9):
+		if not shot_boundary_done and (pow(ball.position.x / 15.7, 2.0) + pow(ball.position.z / 21.0, 2.0) >= 1.0):
 			shot_boundary_done = true
 			run_in_progress = false
 			# Boundary replaces any runs attempted on the same delivery.
