@@ -346,6 +346,34 @@ func _build_hud() -> void:
 	layer.add_child(swap_button)
 	_set_controls()
 
+func _style_one_button(button: Button, accent: Color) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.025, 0.075, 0.13)
+	normal.set_corner_radius_all(16)
+	normal.set_border_width_all(2)
+	normal.border_color = accent
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.07, 0.16, 0.23)
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = accent.darkened(0.45)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
+	button.add_theme_font_size_override("font_size", 16)
+
+func _style_hud() -> void:
+	_style_one_button(bowl_button, Color(0.1, 0.68, 0.88))
+	_style_one_button(defend_button, Color(0.1, 0.68, 0.88))
+	_style_one_button(drive_button, Color(0.1, 0.68, 0.88))
+	_style_one_button(loft_button, Color(0.1, 0.68, 0.88))
+	_style_one_button(swap_button, Color(0.58, 0.62, 0.72))
+	_style_one_button(run_button, Color(0.2, 0.88, 0.45))
+
 func _start_match(mode: String) -> void:
 	play_mode = mode
 	match_started = true
