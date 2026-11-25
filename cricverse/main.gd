@@ -349,6 +349,17 @@ func _build_hud() -> void:
 	swap_button.size = Vector2(174, 44)
 	swap_button.pressed.connect(_swap_controls)
 	layer.add_child(swap_button)
+	run_button = Button.new()
+	run_button.text = "RUN +1"
+	run_button.anchor_left = 1.0
+	run_button.anchor_right = 1.0
+	run_button.anchor_top = 1.0
+	run_button.anchor_bottom = 1.0
+	run_button.position = Vector2(-190, -184)
+	run_button.size = Vector2(174, 64)
+	run_button.pressed.connect(_attempt_run)
+	layer.add_child(run_button)
+	_style_hud()
 	_set_controls()
 
 func _style_one_button(button: Button, accent: Color) -> void:
@@ -387,6 +398,11 @@ func _start_match(mode: String) -> void:
 	balls = 0
 	delivery_active = false
 	auto_delivery_timer = 1.2
+	completed_runs_this_ball = 0
+	shot_boundary_done = false
+	run_in_progress = false
+	if is_instance_valid(run_button):
+		run_button.disabled = true
 	_set_controls()
 	_update_score()
 	_show_status("YOU BAT • AI BOWLS AUTOMATICALLY" if mode == "batting" else "YOU BOWL • AI BATTER PLAYS AUTOMATICALLY")
@@ -400,6 +416,20 @@ func _set_controls() -> void:
 	loft_button.visible = match_started and play_mode == "batting"
 	swap_button.visible = match_started
 	_apply_control_layout()
+
+func _attempt_run() -> void:
+	if not match_started or play_mode != "batting" or not delivery_active or ball_state != "shot" or shot_boundary_done:
+		_show_status("RUN only after you play a shot")
+		return
+	if run_in_progress:
+		return
+	if completed_runs_this_ball >= 3:
+		_show_status("Maximum runs reached for this shot")
+		return
+	run_in_progress = true
+	run_timer = 0.0
+	run_button.disabled = true
+	_show_status("RUNNING! Tap again after reaching the crease")
 
 func _swap_controls() -> void:
 	controls_swapped = not controls_swapped
@@ -458,6 +488,11 @@ func _spawn_ball() -> void:
 	ball_state = "delivery"
 	ball_bounced = false
 	delivery_timer = 0.0
+	completed_runs_this_ball = 0
+	shot_boundary_done = false
+	run_in_progress = false
+	if is_instance_valid(run_button):
+		run_button.disabled = true
 
 func _play_shot(power: float) -> void:
 	if not match_started or play_mode != "batting":
@@ -493,6 +528,10 @@ func _play_shot(power: float) -> void:
 	score += runs
 	shot_power = power
 	ball_state = "shot"
+	completed_runs_this_ball = 0
+	shot_boundary_done = false
+	if is_instance_valid(run_button):
+		run_button.disabled = false
 	var hit_direction := -1.0 if randf() < 0.72 else 1.0
 	ball_velocity = Vector3(randf_range(-5.0, 5.0), 4.0 + power * 3.0, hit_direction * (8.0 + power * 3.0))
 	if timing_quality > 0.78:
