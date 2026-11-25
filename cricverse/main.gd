@@ -43,14 +43,20 @@ func _build_world() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, -28, 0)
 	sun.light_energy = 1.25
+	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 48.0
 	add_child(sun)
 
-	_make_box("Ground", Vector3(0, -0.35, 0), Vector3(32, 0.5, 44), Color(0.10, 0.34, 0.16))
+	var ground := _make_box("Ground", Vector3(0, -0.35, 0), Vector3(32, 0.5, 44), Color(0.10, 0.34, 0.16))
+	ground.material_override = _surface_material(Color(0.13, 0.34, 0.12), 0.18, 18.0)
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Alternating mowing bands give the outfield depth without heavy textures.
 	for i in range(8):
 		var stripe_color := Color(0.13, 0.39, 0.19) if i % 2 == 0 else Color(0.10, 0.32, 0.15)
-		_make_box("Mowing_Stripe", Vector3(-13.8 + i * 3.95, -0.085, 0), Vector3(3.9, 0.025, 42.5), stripe_color)
-	_make_box("Pitch", Vector3(0, -0.04, 0), Vector3(3.2, 0.12, 22), Color(0.61, 0.42, 0.25))
+		var stripe := _make_box("Mowing_Stripe", Vector3(-13.8 + i * 3.95, -0.085, 0), Vector3(3.9, 0.025, 42.5), stripe_color)
+		stripe.material_override = _surface_material(stripe_color, 0.12, 12.0)
+	var pitch := _make_box("Pitch", Vector3(0, -0.04, 0), Vector3(3.2, 0.12, 22), Color(0.61, 0.42, 0.25))
+	pitch.material_override = _surface_material(Color(0.56, 0.37, 0.22), 0.22, 9.0)
 	_make_box("Pitch_Centre", Vector3(0, 0.025, 0), Vector3(2.75, 0.025, 20.5), Color(0.72, 0.55, 0.35))
 	for z in [-8.8, 8.8]:
 		_make_box("Crease", Vector3(0, 0.07, z), Vector3(3.7, 0.035, 0.12), Color(0.96, 0.94, 0.83))
@@ -81,6 +87,23 @@ func _make_box(label: String, pos: Vector3, size: Vector3, color: Color) -> Mesh
 	node.material_override = mat
 	add_child(node)
 	return node
+
+func _surface_material(base_color: Color, noise_amount: float, uv_scale: float) -> StandardMaterial3D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.055
+	noise.fractal_octaves = 4
+	noise.fractal_gain = 0.48
+	var noise_image := noise.get_image(256, 256)
+	var texture := ImageTexture.create_from_image(noise_image)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = base_color
+	material.albedo_texture = texture
+	material.roughness = 0.94
+	material.metallic = 0.0
+	material.uv1_scale = Vector3(uv_scale, uv_scale, 1.0)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	return material
 
 func _mat(color: Color, metallic: float = 0.0, roughness: float = 0.8) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
