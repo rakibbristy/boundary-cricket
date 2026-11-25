@@ -1,6 +1,6 @@
 extends Node3D
 
-var ball: RigidBody3D
+var ball: Node3D
 var batter: Node3D
 var score := 0
 var wickets := 0
@@ -12,6 +12,9 @@ var delivery_active := false
 var hit_done := false
 var delivery_timer := 0.0
 var shot_power := 0.0
+var ball_velocity := Vector3.ZERO
+var ball_state := "none"
+var ball_bounced := false
 var camera: Camera3D
 var play_mode := "batting"
 var match_started := false
@@ -398,68 +401,95 @@ func _bowl() -> void:
 func _spawn_ball() -> void:
 	if is_instance_valid(ball):
 		ball.queue_free()
-	ball = RigidBody3D.new()
+	ball = Node3D.new()
+	ball.name = "CricketBall"
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.12
 	sphere.height = 0.24
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = sphere
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.78, 0.08, 0.07)
+	mat.albedo_color = Color(0.78, 0.06, 0.045)
+	mat.roughness = 0.32
+	mat.metallic = 0.05
 	mesh.material_override = mat
 	ball.add_child(mesh)
-	var shape := CollisionShape3D.new()
-	var sphere_shape := SphereShape3D.new()
-	sphere_shape.radius = 0.12
-	shape.shape = sphere_shape
-	ball.add_child(shape)
-	ball.position = Vector3(randf_range(-0.35, 0.35), 1.05, -8.2)
-	ball.gravity_scale = 0.18
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.12, 0.08)
+	glow.light_energy = 0.12
+	glow.omni_range = 0.7
+	ball.add_child(glow)
+	ball.position = Vector3(randf_range(-0.28, 0.28), 1.15, -8.2)
 	add_child(ball)
-	ball.linear_velocity = Vector3(randf_range(-0.22, 0.22), -0.05, 6.2)
+	ball_velocity = Vector3(randf_range(-0.10, 0.10), -0.15, 7.4)
+	ball_state = "delivery"
+	ball_bounced = false
+	delivery_timer = 0.0
 
 func _play_shot(power: float) -> void:
 	if not match_started or play_mode != "batting":
 		_show_status("Batting controls are available in BAT FIRST mode")
 		return
-	if not delivery_active or hit_done or not is_instance_valid(ball):
-		_show_status("Wait for the ball, then play your shot")
+	if not delivery_active or hit_done or not is_instance_valid(ball) or ball_state != "delivery":
+		_show_status("Wait for the incoming ball")
 		return
-	var distance_to_contact: float = absf(ball.position.z - 5.7)
-	if distance_to_contact <= 3.15:
-		hit_done = true
-		var timing_quality: float = clampf(1.0 - distance_to_contact / 3.15, 0.0, 1.0)
-		var runs := 0
-		if power > 1.2:
-			if timing_quality > 0.72:
-				runs = 6 if randf() < 0.48 else 4
-			elif timing_quality > 0.35:
-				runs = 4 if randf() < 0.42 else 2
-			else:
-				runs = 1 if randf() < 0.55 else 0
-		elif power > 0.8:
-			if timing_quality > 0.65:
-				runs = 4 if randf() < 0.48 else 2
-			elif timing_quality > 0.25:
-				runs = 2 if randf() < 0.55 else 1
-			else:
-				runs = 0 if randf() < 0.35 else 1
+	var contact_z := 5.95
+	var timing_error: float = absf(ball.position.z - contact_z)
+	if timing_error > 2.55:
+		_show_status("Too early — watch the ball and tap near the batter")
+		return
+	hit_done = true
+	var timing_quality: float = clampf(1.0 - timing_error / 2.55, 0.0, 1.0)
+	var runs := 0
+	if power > 1.2:
+		if timing_quality > 0.78:
+			runs = 6 if randf() < 0.58 else 4
+		elif timing_quality > 0.48:
+			runs = 4 if randf() < 0.55 else 2
 		else:
-			runs = 1 if timing_quality > 0.25 and randf() < 0.8 else 0
-		score += runs
-		_show_status(("PERFECT TIMING! " if timing_quality > 0.72 else "SHOT PLAYED! ") + "+%d RUNS" % runs)
-		ball.freeze = true
-		ball.linear_velocity = Vector3(randf_range(-4.5, 4.5), 3.0 + 3.0 * power, -randf_range(5.0, 10.0))
+			runs = 1 if randf() < 0.5 else 0
+	elif power > 0.8:
+		if timing_quality > 0.72:
+			runs = 4 if randf() < 0.55 else 2
+		elif timing_quality > 0.35:
+			runs = 2 if randf() < 0.65 else 1
+		else:
+			runs = 1
 	else:
-		hit_done = true
-		_show_status("Too early/late — dot ball, try again!")
-		if distance_to_contact < 4.2 and randf() < 0.06:
-			wickets += 1
-			_show_status("BOWLED! WICKET")
+		runs = 1 if timing_quality > 0.2 else 0
+	score += runs
+	shot_power = power
+	ball_state = "shot"
+	var hit_direction := -1.0 if randf() < 0.72 else 1.0
+	ball_velocity = Vector3(randf_range(-5.0, 5.0), 4.0 + power * 3.0, hit_direction * (8.0 + power * 3.0))
+	if timing_quality > 0.78:
+		_show_status("PERFECT CONTACT!  +%d RUNS" % runs)
+	elif timing_quality > 0.45:
+		_show_status("GOOD SHOT!  +%d RUNS" % runs)
+	else:
+		_show_status("EDGED!  +%d RUNS" % runs)
+	_animate_bat_swing()
 	_update_score()
+
+func _animate_bat_swing() -> void:
+	if not is_instance_valid(batter):
+		return
+	var bat_blade := batter.get_node_or_null("Bat_Blade") as Node3D
+	if bat_blade == null:
+		return
+	var tween := create_tween()
+	tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -82), 0.10)
+	tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -12), 0.22)
+
+func _finish_delivery(message: String = "") -> void:
 	delivery_active = false
 	balls += 1
-	auto_delivery_timer = 1.8
+	if message != "":
+		_show_status(message)
+	if is_instance_valid(ball):
+		ball.queue_free()
+	auto_delivery_timer = 1.7
+	_update_score()
 
 func _process(delta: float) -> void:
 	if not match_started:
@@ -473,31 +503,66 @@ func _process(delta: float) -> void:
 			_spawn_ball()
 			delivery_active = true
 			hit_done = false
-			delivery_timer = 0.0
-			_show_status("AI bowling! Choose DEFEND, DRIVE or LOFT")
-	if delivery_active:
-		delivery_timer += delta
-		if is_instance_valid(ball):
-			if play_mode == "bowling" and not hit_done and ball.position.z > 4.8:
-				hit_done = true
-				var ai_runs: int = [0, 1, 2, 4, 6][randi_range(0, 4)]
-				if ai_runs == 0 and randf() < 0.4:
-					wickets += 1
-					_show_status("AI BATTER OUT!")
-				else:
-					score += ai_runs
-					_show_status("AI scored %d runs" % ai_runs)
-				ball.freeze = true
-				_update_score()
-			if ball.position.z > 10 or ball.position.y < -2 or delivery_timer > 4.5:
-				delivery_active = false
-				balls += 1
-				if not hit_done:
-					balls += 1
-					_show_status("DOT BALL — no wicket")
-				_update_score()
-				if play_mode == "batting":
-					auto_delivery_timer = 1.8
+			_show_status("AI bowling! Tap DEFEND, DRIVE or LOFT as the ball reaches you")
+	if not delivery_active or not is_instance_valid(ball):
+		return
+
+	delivery_timer += delta
+	# Manual ball simulation keeps the ball visible and predictable on mobile.
+	ball_velocity.y -= 7.2 * delta
+	ball.position += ball_velocity * delta
+
+	# One controlled pitch bounce, followed by a low skidding delivery.
+	if ball_state == "delivery" and not ball_bounced and ball.position.y <= 0.16 and ball.position.z > -5.2:
+		ball.position.y = 0.16
+		ball_velocity.y = 3.15
+		ball_bounced = true
+	elif ball_state == "delivery" and ball_bounced and ball.position.y < 0.13:
+		ball.position.y = 0.13
+		ball_velocity.y = 0.0
+
+	# AI batter reacts at the same contact point used by the player's bat.
+	if play_mode == "bowling" and ball_state == "delivery" and not hit_done and ball.position.z >= 5.65:
+		hit_done = true
+		if randf() < 0.22:
+			wickets += 1
+			_show_status("BEATEN! AI BATTER MISSED — WICKET!")
+			ball_state = "delivery"
+		else:
+			var ai_runs: int = [0, 1, 2, 4, 6][randi_range(0, 4)]
+			score += ai_runs
+			_show_status("AI BATTER SCORES %d" % ai_runs)
+			ball_state = "shot"
+			ball_velocity = Vector3(randf_range(-4.5, 4.5), 4.0 + randf_range(0.0, 2.5), -randf_range(7.0, 12.0))
+		_update_score()
+
+	# If the player misses a straight delivery, the ball reaches the stumps.
+	if play_mode == "batting" and ball_state == "delivery" and not hit_done and ball.position.z >= 7.55:
+		hit_done = true
+		if absf(ball.position.x) < 0.52 and ball.position.y < 1.25:
+			wickets += 1
+			_show_status("BOWLED! Watch the line and timing.")
+		else:
+			_show_status("BEATEN! Dot ball.")
+		_update_score()
+
+	# Keep hit balls in play until they reach the boundary or stop.
+	if ball_state == "shot":
+		if ball.position.y <= 0.14:
+			ball.position.y = 0.14
+			ball_velocity.y = 0.0
+			ball_velocity.x *= 0.985
+			ball_velocity.z *= 0.985
+		if absf(ball.position.x) > 15.0 or absf(ball.position.z) > 20.0:
+			_finish_delivery("BOUNDARY! Delivery complete.")
+			return
+		if ball_velocity.length() < 1.0 or delivery_timer > 5.0:
+			_finish_delivery("RUNS COMPLETED.")
+			return
+
+	if ball_state == "delivery" and (ball.position.z > 9.8 or ball.position.y < -1.0 or delivery_timer > 4.2):
+		_finish_delivery("DELIVERY COMPLETE — NEXT BALL")
+
 func _update_score() -> void:
 	if is_instance_valid(runs_label):
 		runs_label.text = "CRICVERSE   %d/%d   •   %d.%d overs" % [score, wickets, int(balls / 6), balls % 6]
