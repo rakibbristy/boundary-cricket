@@ -13,12 +13,19 @@ var hit_done := false
 var delivery_timer := 0.0
 var shot_power := 0.0
 var camera: Camera3D
+var play_mode := "batting"
+var match_started := false
+var auto_delivery_timer := 1.2
+var bowl_button: Button
+var defend_button: Button
+var drive_button: Button
+var loft_button: Button
 
 func _ready() -> void:
 	_build_world()
 	_build_hud()
 	_update_score()
-	_show_status("CRICVERSE • Tap BOWL to start")
+	_show_status("Choose BAT FIRST or BOWL FIRST")
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
@@ -177,8 +184,8 @@ func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var panel := PanelContainer.new()
-	panel.position = Vector2(18, 18)
-	panel.size = Vector2(330, 86)
+	panel.position = Vector2(12, 12)
+	panel.size = Vector2(340, 92)
 	layer.add_child(panel)
 	var v := VBoxContainer.new()
 	panel.add_child(v)
@@ -188,48 +195,79 @@ func _build_hud() -> void:
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 15)
 	v.add_child(status_label)
+	var bat_mode := Button.new()
+	bat_mode.text = "BAT FIRST (AI BOWLS)"
+	bat_mode.position = Vector2(15, 120)
+	bat_mode.size = Vector2(320, 54)
+	bat_mode.pressed.connect(func(): _start_match("batting"))
+	layer.add_child(bat_mode)
+	var bowl_mode := Button.new()
+	bowl_mode.text = "BOWL FIRST (AI BATS)"
+	bowl_mode.position = Vector2(15, 180)
+	bowl_mode.size = Vector2(320, 54)
+	bowl_mode.pressed.connect(func(): _start_match("bowling"))
+	layer.add_child(bowl_mode)
+	bowl_button = Button.new()
+	bowl_button.text = "BOWL"
+	bowl_button.position = Vector2(15, 250)
+	bowl_button.size = Vector2(150, 64)
+	bowl_button.pressed.connect(_bowl)
+	layer.add_child(bowl_button)
+	defend_button = Button.new()
+	defend_button.text = "DEFEND"
+	defend_button.position = Vector2(175, 250)
+	defend_button.size = Vector2(150, 64)
+	defend_button.pressed.connect(func(): _play_shot(0.35))
+	layer.add_child(defend_button)
+	drive_button = Button.new()
+	drive_button.text = "DRIVE"
+	drive_button.position = Vector2(15, 324)
+	drive_button.size = Vector2(150, 64)
+	drive_button.pressed.connect(func(): _play_shot(1.0))
+	layer.add_child(drive_button)
+	loft_button = Button.new()
+	loft_button.text = "LOFT"
+	loft_button.position = Vector2(175, 324)
+	loft_button.size = Vector2(150, 64)
+	loft_button.pressed.connect(func(): _play_shot(1.35))
+	layer.add_child(loft_button)
+	_set_controls()
 
-	var bowl := Button.new()
-	bowl.text = "BOWL"
-	bowl.position = Vector2(18, 125)
-	bowl.size = Vector2(145, 62)
-	bowl.add_theme_font_size_override("font_size", 22)
-	bowl.pressed.connect(_bowl)
-	layer.add_child(bowl)
-	var defend := Button.new()
-	defend.text = "DEFEND"
-	defend.position = Vector2(174, 125)
-	defend.size = Vector2(145, 62)
-	defend.pressed.connect(func(): _play_shot(0.35))
-	layer.add_child(defend)
-	var drive := Button.new()
-	drive.text = "DRIVE"
-	drive.position = Vector2(18, 198)
-	drive.size = Vector2(145, 62)
-	drive.add_theme_font_size_override("font_size", 20)
-	drive.pressed.connect(func(): _play_shot(1.0))
-	layer.add_child(drive)
-	var loft := Button.new()
-	loft.text = "LOFT"
-	loft.position = Vector2(174, 198)
-	loft.size = Vector2(145, 62)
-	loft.add_theme_font_size_override("font_size", 20)
-	loft.pressed.connect(func(): _play_shot(1.35))
-	layer.add_child(loft)
+func _start_match(mode: String) -> void:
+	play_mode = mode
+	match_started = true
+	score = 0
+	wickets = 0
+	balls = 0
+	delivery_active = false
+	auto_delivery_timer = 1.2
+	_set_controls()
+	_update_score()
+	_show_status("YOU BAT • AI BOWLS AUTOMATICALLY" if mode == "batting" else "YOU BOWL • AI BATTER PLAYS AUTOMATICALLY")
+
+func _set_controls() -> void:
+	if not is_instance_valid(bowl_button):
+		return
+	bowl_button.visible = match_started and play_mode == "bowling"
+	defend_button.visible = match_started and play_mode == "batting"
+	drive_button.visible = match_started and play_mode == "batting"
+	loft_button.visible = match_started and play_mode == "batting"
 
 func _bowl() -> void:
+	if not match_started or play_mode != "bowling":
+		_show_status("Choose BOWL FIRST. In batting mode, AI bowls automatically.")
+		return
 	if delivery_active:
 		return
 	if balls >= 6:
-		_show_status("Over complete! Tap BOWL to start next over")
 		balls = 0
+		_show_status("New over started")
 	_update_score()
 	_spawn_ball()
 	delivery_active = true
 	hit_done = false
 	delivery_timer = 0.0
-	_show_status("Ball coming... time your shot!")
-
+	_show_status("Your delivery! AI batter will play automatically.")
 func _spawn_ball() -> void:
 	if is_instance_valid(ball):
 		ball.queue_free()
@@ -254,8 +292,11 @@ func _spawn_ball() -> void:
 	ball.linear_velocity = Vector3(randf_range(-0.4, 0.4), -0.1, 8.5)
 
 func _play_shot(power: float) -> void:
+	if not match_started or play_mode != "batting":
+		_show_status("Batting controls are available in BAT FIRST mode")
+		return
 	if not delivery_active or hit_done or not is_instance_valid(ball):
-		_show_status("Tap BOWL first")
+		_show_status("Wait for the delivery, then choose your shot")
 		return
 	var timing: float = absf(ball.position.z - 5.6)
 	hit_done = true
@@ -268,30 +309,54 @@ func _play_shot(power: float) -> void:
 		else:
 			runs = 1 if randf() > 0.5 else 0
 		score += runs
-		_show_status("PERFECT TIMING!  +%d RUNS" % runs)
+		_show_status("GOOD SHOT! +%d RUNS" % runs)
 		ball.freeze = true
 		ball.linear_velocity = Vector3(randf_range(-5, 5), 5.0 * power, -randf_range(7, 12))
 	else:
-		_show_status("Too early / late! Missed the ball")
+		_show_status("Missed timing")
 		if timing > 3.0:
 			wickets += 1
 			_show_status("OUT! Wicket lost")
 	_update_score()
 	delivery_active = false
 	balls += 1
-
+	auto_delivery_timer = 1.4
 func _process(delta: float) -> void:
+	if not match_started:
+		return
+	if play_mode == "batting" and not delivery_active:
+		auto_delivery_timer -= delta
+		if auto_delivery_timer <= 0.0:
+			if balls >= 6:
+				balls = 0
+				_show_status("New over • AI bowling")
+			_spawn_ball()
+			delivery_active = true
+			hit_done = false
+			delivery_timer = 0.0
+			_show_status("AI bowling! Choose DEFEND, DRIVE or LOFT")
 	if delivery_active:
 		delivery_timer += delta
 		if is_instance_valid(ball):
+			if play_mode == "bowling" and not hit_done and ball.position.z > 4.8:
+				hit_done = true
+				var ai_runs: int = [0, 1, 2, 4, 6][randi_range(0, 4)]
+				if ai_runs == 0 and randf() < 0.4:
+					wickets += 1
+					_show_status("AI BATTER OUT!")
+				else:
+					score += ai_runs
+					_show_status("AI scored %d runs" % ai_runs)
+				ball.freeze = true
+				_update_score()
 			if ball.position.z > 10 or ball.position.y < -2 or delivery_timer > 4.0:
 				delivery_active = false
+				balls += 1
 				if not hit_done:
-					wickets += 1
-					balls += 1
-					_show_status("WICKET! You missed the delivery")
-					_update_score()
-
+					_show_status("DOT BALL")
+				_update_score()
+				if play_mode == "batting":
+					auto_delivery_timer = 1.4
 func _update_score() -> void:
 	if is_instance_valid(runs_label):
 		runs_label.text = "CRICVERSE   %d/%d   •   %d.%d overs" % [score, wickets, int(balls / 6), balls % 6]
