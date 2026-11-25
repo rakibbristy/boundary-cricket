@@ -1,0 +1,83 @@
+name: Boundary Cricket APK Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Godot Android tools
+        run: |
+          mkdir -p ~/.config
+          cp -a /root/.config/godot ~/.config/godot
+          mkdir -p ~/.local/share/godot
+          cp -a /root/.local/share/godot/export_templates ~/.local/share/godot/
+          echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> ~/.config/godot/editor_settings-4.3.tres
+
+      - name: Extract cricket project
+        run: |
+          ZIP_FILE="$(find . -maxdepth 1 -name '*.zip' | head -n 1)"
+          test -n "$ZIP_FILE"
+          mkdir extracted
+          unzip -q "$ZIP_FILE" -d extracted
+          PROJECT_DIR="$(find extracted -name project.godot -printf '%h\n' | head -n 1)"
+          test -n "$PROJECT_DIR"
+          mkdir game
+          cp -a "$PROJECT_DIR"/. game/
+
+      - name: Create Android export preset
+        run: |
+          cd game
+          cat > export_presets.cfg <<'EOF'
+          [preset.0]
+          name="Android"
+          platform="Android"
+          runnable=true
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path=""
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+
+          [preset.0.options]
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=true
+          architectures/arm64-v8a=true
+          version/code=1
+          version/name="1.0"
+          package/unique_name="com.example.boundarycricket"
+          package/name="Boundary Cricket"
+          package/signed=true
+          screen/immersive_mode=true
+          EOF
+
+      - name: Import project
+        run: godot --headless --editor --path game --quit
+
+      - name: Build Android APK
+        run: |
+          mkdir -p game/build
+          godot --headless --path game --export-debug "Android" game/build/BoundaryCricket.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Boundary-Cricket-APK
+          path: game/build/BoundaryCricket.apk
+          
