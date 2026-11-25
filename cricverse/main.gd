@@ -75,6 +75,7 @@ func _build_world() -> void:
 		_make_box("Bail", Vector3(0, 1.10, z), Vector3(0.82, 0.055, 0.075), Color(0.98, 0.91, 0.73))
 	_make_box("Boundary North", Vector3(0, 0.05, -20), Vector3(32, 0.1, 0.18), Color.WHITE)
 	_make_box("Boundary South", Vector3(0, 0.05, 20), Vector3(32, 0.1, 0.18), Color.WHITE)
+	_build_stadium()
 	make_batter()
 	make_bowler()
 	camera = Camera3D.new()
@@ -82,6 +83,36 @@ func _build_world() -> void:
 	camera.rotation_degrees = Vector3(-19, 0, 0)
 	camera.current = true
 	add_child(camera)
+
+
+func _build_stadium() -> void:
+	# Original compact stadium environment: tiered stands, crowd silhouettes and floodlights.
+	for side in [-1.0, 1.0]:
+		for tier in range(4):
+			var x := side * (18.0 + tier * 0.72)
+			var y := 0.75 + tier * 0.72
+			var stand_color := Color(0.10, 0.16, 0.27) if tier % 2 == 0 else Color(0.15, 0.22, 0.34)
+			_make_box("Grandstand_Tier", Vector3(x, y, 0), Vector3(1.35, 0.62, 39.0), stand_color)
+			_make_box("Stand_Front_Rail", Vector3(side * (17.25 + tier * 0.72), y + 0.38, 0), Vector3(0.08, 0.12, 39.0), Color(0.72, 0.78, 0.86))
+		_make_box("Stand_Roof", Vector3(side * 20.6, 4.1, 0), Vector3(0.28, 0.22, 40.0), Color(0.07, 0.10, 0.16))
+	# Floodlight masts with bright lamps at all four corners.
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var mast_pos := Vector3(sx * 20.5, 7.0, sz * 17.0)
+			var mast := _make_box("Floodlight_Mast", mast_pos, Vector3(0.22, 14.0, 0.22), Color(0.48, 0.54, 0.62))
+			mast.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_make_box("Floodlight_Bank", mast_pos + Vector3(0, 6.9, 0), Vector3(1.8, 0.45, 0.65), Color(0.92, 0.94, 1.0))
+			var lamp := OmniLight3D.new()
+			lamp.position = mast_pos + Vector3(0, 6.3, 0)
+			lamp.light_color = Color(0.78, 0.86, 1.0)
+			lamp.light_energy = 1.1
+			lamp.omni_range = 28.0
+			lamp.shadow_enabled = false
+			add_child(lamp)
+	# Advertising boards around the playing area.
+	for z in [-18.9, 18.9]:
+		_make_box("Sponsor_Board", Vector3(0, 0.48, z), Vector3(27.0, 0.85, 0.18), Color(0.035, 0.12, 0.20))
+		_make_box("Sponsor_Board_Trim", Vector3(0, 0.94, z), Vector3(27.0, 0.06, 0.20), Color(0.12, 0.76, 0.82))
 
 func _make_box(label: String, pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
