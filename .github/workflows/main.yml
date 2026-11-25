@@ -7,7 +7,8 @@ on:
 
 jobs:
   android:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
+
     container:
       image: barichello/godot-ci:4.3
 
@@ -15,13 +16,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare Godot Android tools
+      - name: Check Android tools
         run: |
-          mkdir -p ~/.config
-          cp -a /root/.config/godot ~/.config/godot
-          mkdir -p ~/.local/share/godot
-          cp -a /root/.local/share/godot/export_templates ~/.local/share/godot/
-          echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> ~/.config/godot/editor_settings-4.3.tres
+          echo "Checking Android SDK..."
+          java -version
+          godot --version
+          ls -la /usr/lib/android-sdk || true
+          ls -la /opt/android-sdk || true
 
       - name: Extract cricket project
         run: |
@@ -34,8 +35,9 @@ jobs:
           mkdir game
           cp -a "$PROJECT_DIR"/. game/
 
-      - name: Create Android export preset
+      - name: Configure Android export
         run: |
+          mkdir -p game/build
           cd game
           cat > export_presets.cfg <<'EOF'
           [preset.0]
@@ -57,23 +59,28 @@ jobs:
           custom_template/debug=""
           custom_template/release=""
           gradle_build/use_gradle_build=false
-          architectures/armeabi-v7a=true
+          architectures/armeabi-v7a=false
           architectures/arm64-v8a=true
           version/code=1
           version/name="1.0"
           package/unique_name="com.example.boundarycricket"
           package/name="Boundary Cricket"
-          package/signed=true
+          package/signed=false
           screen/immersive_mode=true
           EOF
 
       - name: Import project
-        run: godot --headless --editor --path game --quit
+        run: |
+          godot --headless --editor --path game --quit
 
       - name: Build Android APK
         run: |
-          mkdir -p game/build
           godot --headless --path game --export-debug "Android" game/build/BoundaryCricket.apk
+
+      - name: Verify APK
+        run: |
+          test -f game/build/BoundaryCricket.apk
+          ls -lh game/build/BoundaryCricket.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
