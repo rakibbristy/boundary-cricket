@@ -483,6 +483,7 @@ func _animate_bat_swing() -> void:
 
 func _finish_delivery(message: String = "") -> void:
 	delivery_active = false
+	run_in_progress = false
 	balls += 1
 	if message != "":
 		_show_status(message)
@@ -511,6 +512,16 @@ func _process(delta: float) -> void:
 	# Manual ball simulation keeps the ball visible and predictable on mobile.
 	ball_velocity.y -= 7.2 * delta
 	ball.position += ball_velocity * delta
+	if run_in_progress:
+		run_timer += delta
+		if run_timer >= 1.05:
+			run_in_progress = false
+			completed_runs_this_ball += 1
+			score += 1
+			_update_score()
+			if is_instance_valid(run_button):
+				run_button.disabled = false
+			_show_status("SAFE! %d run(s) completed — press RUN again" % completed_runs_this_ball)
 
 	# One controlled pitch bounce, followed by a low skidding delivery.
 	if ball_state == "delivery" and not ball_bounced and ball.position.y <= 0.16 and ball.position.z > -5.2:
@@ -529,7 +540,7 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! AI BATTER MISSED — WICKET!")
 			ball_state = "delivery"
 		else:
-			var ai_runs: int = [0, 1, 2, 4, 6][randi_range(0, 4)]
+			var ai_runs: int = [0, 1, 2, 4][randi_range(0, 3)]
 			score += ai_runs
 			_show_status("AI BATTER SCORES %d" % ai_runs)
 			ball_state = "shot"
@@ -546,18 +557,29 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! Dot ball.")
 		_update_score()
 
-	# Keep hit balls in play until they reach the boundary or stop.
+	# Hit ball: one ground contact, then controlled roll.
 	if ball_state == "shot":
 		if ball.position.y <= 0.14:
 			ball.position.y = 0.14
-			ball_velocity.y = 0.0
-			ball_velocity.x *= 0.985
-			ball_velocity.z *= 0.985
-		if absf(ball.position.x) > 15.0 or absf(ball.position.z) > 20.0:
-			_finish_delivery("BOUNDARY! Delivery complete.")
+			if ball_velocity.y < -1.0:
+				ball_velocity.y = 0.0
+			ball_velocity.x *= 0.992
+			ball_velocity.z *= 0.992
+		if not shot_boundary_done and (absf(ball.position.x) >= 15.9 or absf(ball.position.z) >= 19.9):
+			shot_boundary_done = true
+			run_in_progress = false
+			var is_six: bool = ball.position.y > 1.05
+			var boundary_runs: int = 6 if is_six else 4
+			score += boundary_runs
+			_show_status("SIX! +6" if is_six else "FOUR! +4")
+			_update_score()
+			_finish_delivery()
 			return
-		if ball_velocity.length() < 1.0 or delivery_timer > 5.0:
-			_finish_delivery("RUNS COMPLETED.")
+		if ball_velocity.length() < 1.15 or delivery_timer > 6.0:
+			run_in_progress = false
+			if is_instance_valid(run_button):
+				run_button.disabled = true
+			_finish_delivery("BALL STOPPED — %d run(s)" % completed_runs_this_ball)
 			return
 
 	if ball_state == "delivery" and (ball.position.z > 9.8 or ball.position.y < -1.0 or delivery_timer > 4.2):
