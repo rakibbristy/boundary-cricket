@@ -89,10 +89,14 @@ jobs:
           test -x "$JAVA_HOME/bin/java"
           test -x "$JAVA_HOME/bin/keytool"
           mkdir -p /root/.config/godot
-          "$JAVA_HOME/bin/keytool" -genkeypair -keystore /root/debug.keystore \
-            -storepass android -alias androiddebugkey -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US" -noprompt
+          if [ ! -f /root/debug.keystore ] || ! "$JAVA_HOME/bin/keytool" -list -keystore /root/debug.keystore -storepass android -alias androiddebugkey >/dev/null 2>&1; then
+            "$JAVA_HOME/bin/keytool" -genkeypair -keystore /root/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US" -noprompt
+          else
+            echo "Using existing Android debug keystore"
+          fi
           cat > /root/.config/godot/editor_settings-4.3.tres <<EOF
           [gd_resource type="EditorSettings" format=3]
 
