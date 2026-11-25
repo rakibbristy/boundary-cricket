@@ -1,4 +1,3 @@
-
 name: Boundary Cricket APK Build
 
 on:
@@ -11,11 +10,6 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: barichello/godot-ci:4.3
-    env:
-      HOME: /root
-      GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /root/debug.keystore
-      GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
-      GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
 
     steps:
       - name: Checkout repository
@@ -23,17 +17,80 @@ jobs:
 
       - name: Extract cricket project
         run: |
+          set -e
           ZIP_FILE="$(find . -maxdepth 1 -name '*.zip' | head -n 1)"
-          mkdir extracted
+          if [ -z "$ZIP_FILE" ]; then
+            echo "Project ZIP file not found"
+            exit 1
+          fi
+
+          mkdir -p extracted game
           unzip -q "$ZIP_FILE" -d extracted
+
           PROJECT_DIR="$(find extracted -name project.godot -printf '%h\n' | head -n 1)"
-          mkdir game
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "project.godot not found in ZIP"
+            exit 1
+          fi
+
           cp -a "$PROJECT_DIR"/. game/
 
-      - name: Configure Android export
+      - name: Configure Android SDK
         run: |
-          cd game
-          cat > export_presets.cfg <<'EOF'
+          set -e
+
+          export ANDROID_HOME=/usr/lib/android-sdk
+          export ANDROID_SDK_ROOT=/usr/lib/android-sdk
+
+          SDKMANAGER="$(find /usr/lib/android-sdk -name sdkmanager -type f | head -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Android SDK manager not found"
+            exit 1
+          fi
+
+          chmod +x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "ndk;23.2.8568313" \
+            "cmake;3.10.2.4988404"
+
+      - name: Configure Java and debug keystore
+        run: |
+          set -e
+
+          export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+
+          mkdir -p /root/.config/godot
+
+          if [ ! -f /root/debug.keystore ]; then
+            "$JAVA_HOME/bin/keytool" -genkeypair \
+              -keystore /root/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          cat > /root/.config/godot/editor_settings-4.3.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "/root/debug.keystore"
+          EOF
+
+      - name: Create Android export preset
+        run: |
+          cat > game/export_presets.cfg <<'EOF'
           [preset.0]
           name="Android"
           platform="Android"
@@ -66,17 +123,31 @@ jobs:
           screen/immersive_mode=true
           EOF
 
-      - name: Import project
-        run: godot --headless --editor --path game --quit
+      - name: Import Godot project
+        env:
+          HOME: /root
+          ANDROID_HOME: /usr/lib/android-sdk
+          ANDROID_SDK_ROOT: /usr/lib/android-sdk
+        run: |
+          godot --headless --editor --path game --quit
 
       - name: Build Android APK
+        env:
+          HOME: /root
+          ANDROID_HOME: /usr/lib/android-sdk
+          ANDROID_SDK_ROOT: /usr/lib/android-sdk
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /root/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
+          set -e
           mkdir -p game/build
-          godot --headless --verbose --path game --export-debug "Android" game/build/BoundaryCricket.apk
+          godot --headless --verbose --path game \
+            --export-debug "Android" game/build/BoundaryCricket.apk
 
       - name: Verify APK
         run: |
-          test -f game/build/BoundaryCricket.apk
+          test -s game/build/BoundaryCricket.apk
           ls -lh game/build/BoundaryCricket.apk
 
       - name: Upload APK
@@ -84,4 +155,5 @@ jobs:
         with:
           name: Boundary-Cricket-APK
           path: game/build/BoundaryCricket.apk
+          if-no-files-found: error
           
