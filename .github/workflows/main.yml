@@ -1,3 +1,4 @@
+
 name: Boundary Cricket APK Build
 
 on:
@@ -8,34 +9,24 @@ on:
 jobs:
   android:
     runs-on: ubuntu-22.04
-
     container:
       image: barichello/godot-ci:4.3
-
     env:
       HOME: /root
+      GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /root/debug.keystore
+      GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+      GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check Android setup
-        run: |
-          godot --version
-          java -version
-          test -f /root/debug.keystore
-          test -d /root/.local/share/godot/export_templates/4.3.stable
-          test -d /usr/lib/android-sdk
-          test -d /usr/lib/jvm/java-17-openjdk-amd64
-
       - name: Extract cricket project
         run: |
           ZIP_FILE="$(find . -maxdepth 1 -name '*.zip' | head -n 1)"
-          test -n "$ZIP_FILE"
           mkdir extracted
           unzip -q "$ZIP_FILE" -d extracted
           PROJECT_DIR="$(find extracted -name project.godot -printf '%h\n' | head -n 1)"
-          test -n "$PROJECT_DIR"
           mkdir game
           cp -a "$PROJECT_DIR"/. game/
 
@@ -66,20 +57,22 @@ jobs:
           architectures/arm64-v8a=true
           version/code=1
           version/name="1.0"
-          package/unique_name="com.example.boundarycricket"
+          package/unique_name="com.boundarycricket.game"
           package/name="Boundary Cricket"
           package/signed=true
+          keystore/debug="/root/debug.keystore"
+          keystore/debug_user="androiddebugkey"
+          keystore/debug_password="android"
           screen/immersive_mode=true
           EOF
 
       - name: Import project
-        run: |
-          godot --headless --editor --path game --quit
+        run: godot --headless --editor --path game --quit
 
       - name: Build Android APK
         run: |
           mkdir -p game/build
-          godot --headless --path game --export-debug "Android" game/build/BoundaryCricket.apk
+          godot --headless --verbose --path game --export-debug "Android" game/build/BoundaryCricket.apk
 
       - name: Verify APK
         run: |
