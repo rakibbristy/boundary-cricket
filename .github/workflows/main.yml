@@ -171,7 +171,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p game/build
-          godot --headless --verbose --path game --export-debug "Android" game/build/CRICVERSE.apk
+          godot --headless --verbose --path game --export-debug "Android" build/CRICVERSE.apk
           test -s game/build/CRICVERSE.apk
           echo "APK BUILD SUCCESSFUL"
           ls -lh game/build/CRICVERSE.apk
