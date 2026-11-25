@@ -168,7 +168,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p game/build
-          godot --headless --verbose --path game --export-debug "Android" game/build/BoundaryCricket.apk
+          godot --headless --verbose --path game --export-debug "Android" build/BoundaryCricket.apk
           test -s game/build/BoundaryCricket.apk
           echo "APK BUILD SUCCESSFUL"
           ls -lh game/build/BoundaryCricket.apk
