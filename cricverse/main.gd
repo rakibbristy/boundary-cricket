@@ -20,6 +20,8 @@ var bowl_button: Button
 var defend_button: Button
 var drive_button: Button
 var loft_button: Button
+var swap_button: Button
+var controls_swapped := false
 
 func _ready() -> void:
 	_build_world()
@@ -209,28 +211,46 @@ func _build_hud() -> void:
 	layer.add_child(bowl_mode)
 	bowl_button = Button.new()
 	bowl_button.text = "BOWL"
-	bowl_button.position = Vector2(15, 250)
+	bowl_button.anchor_top = 1.0
+	bowl_button.anchor_bottom = 1.0
+	bowl_button.position = Vector2(16, -184)
 	bowl_button.size = Vector2(150, 64)
 	bowl_button.pressed.connect(_bowl)
 	layer.add_child(bowl_button)
 	defend_button = Button.new()
 	defend_button.text = "DEFEND"
-	defend_button.position = Vector2(175, 250)
+	defend_button.anchor_top = 1.0
+	defend_button.anchor_bottom = 1.0
+	defend_button.position = Vector2(175, -184)
 	defend_button.size = Vector2(150, 64)
 	defend_button.pressed.connect(func(): _play_shot(0.35))
 	layer.add_child(defend_button)
 	drive_button = Button.new()
 	drive_button.text = "DRIVE"
-	drive_button.position = Vector2(15, 324)
+	drive_button.anchor_top = 1.0
+	drive_button.anchor_bottom = 1.0
+	drive_button.position = Vector2(16, -108)
 	drive_button.size = Vector2(150, 64)
 	drive_button.pressed.connect(func(): _play_shot(1.0))
 	layer.add_child(drive_button)
 	loft_button = Button.new()
 	loft_button.text = "LOFT"
-	loft_button.position = Vector2(175, 324)
+	loft_button.anchor_top = 1.0
+	loft_button.anchor_bottom = 1.0
+	loft_button.position = Vector2(175, -108)
 	loft_button.size = Vector2(150, 64)
 	loft_button.pressed.connect(func(): _play_shot(1.35))
 	layer.add_child(loft_button)
+	swap_button = Button.new()
+	swap_button.text = "⇄ MOVE CONTROLS"
+	swap_button.anchor_left = 1.0
+	swap_button.anchor_right = 1.0
+	swap_button.anchor_top = 1.0
+	swap_button.anchor_bottom = 1.0
+	swap_button.position = Vector2(-190, -58)
+	swap_button.size = Vector2(174, 44)
+	swap_button.pressed.connect(_swap_controls)
+	layer.add_child(swap_button)
 	_set_controls()
 
 func _start_match(mode: String) -> void:
@@ -252,6 +272,23 @@ func _set_controls() -> void:
 	defend_button.visible = match_started and play_mode == "batting"
 	drive_button.visible = match_started and play_mode == "batting"
 	loft_button.visible = match_started and play_mode == "batting"
+	swap_button.visible = match_started
+	_apply_control_layout()
+
+func _swap_controls() -> void:
+	controls_swapped = not controls_swapped
+	_apply_control_layout()
+	_show_status("Controls position changed")
+
+func _apply_control_layout() -> void:
+	if not is_instance_valid(defend_button):
+		return
+	var left_x := 16.0 if not controls_swapped else 390.0
+	var right_x := 175.0 if not controls_swapped else 549.0
+	bowl_button.position.x = left_x
+	defend_button.position.x = left_x
+	drive_button.position.x = right_x
+	loft_button.position.x = right_x
 
 func _bowl() -> void:
 	if not match_started or play_mode != "bowling":
@@ -286,41 +323,54 @@ func _spawn_ball() -> void:
 	sphere_shape.radius = 0.12
 	shape.shape = sphere_shape
 	ball.add_child(shape)
-	ball.position = Vector3(randf_range(-0.55, 0.55), 1.1, -8.2)
-	ball.gravity_scale = 0.35
+	ball.position = Vector3(randf_range(-0.35, 0.35), 1.05, -8.2)
+	ball.gravity_scale = 0.18
 	add_child(ball)
-	ball.linear_velocity = Vector3(randf_range(-0.4, 0.4), -0.1, 8.5)
+	ball.linear_velocity = Vector3(randf_range(-0.22, 0.22), -0.05, 6.2)
 
 func _play_shot(power: float) -> void:
 	if not match_started or play_mode != "batting":
 		_show_status("Batting controls are available in BAT FIRST mode")
 		return
 	if not delivery_active or hit_done or not is_instance_valid(ball):
-		_show_status("Wait for the delivery, then choose your shot")
+		_show_status("Wait for the ball, then play your shot")
 		return
-	var timing: float = absf(ball.position.z - 5.6)
-	hit_done = true
-	if timing < 1.8:
+	var distance_to_contact: float = absf(ball.position.z - 5.7)
+	if distance_to_contact <= 3.15:
+		hit_done = true
+		var timing_quality: float = clampf(1.0 - distance_to_contact / 3.15, 0.0, 1.0)
 		var runs := 0
 		if power > 1.2:
-			runs = 6 if randf() > 0.35 else 4
+			if timing_quality > 0.72:
+				runs = 6 if randf() < 0.48 else 4
+			elif timing_quality > 0.35:
+				runs = 4 if randf() < 0.42 else 2
+			else:
+				runs = 1 if randf() < 0.55 else 0
 		elif power > 0.8:
-			runs = 4 if randf() > 0.3 else 2
+			if timing_quality > 0.65:
+				runs = 4 if randf() < 0.48 else 2
+			elif timing_quality > 0.25:
+				runs = 2 if randf() < 0.55 else 1
+			else:
+				runs = 0 if randf() < 0.35 else 1
 		else:
-			runs = 1 if randf() > 0.5 else 0
+			runs = 1 if timing_quality > 0.25 and randf() < 0.8 else 0
 		score += runs
-		_show_status("GOOD SHOT! +%d RUNS" % runs)
+		_show_status(("PERFECT TIMING! " if timing_quality > 0.72 else "SHOT PLAYED! ") + "+%d RUNS" % runs)
 		ball.freeze = true
-		ball.linear_velocity = Vector3(randf_range(-5, 5), 5.0 * power, -randf_range(7, 12))
+		ball.linear_velocity = Vector3(randf_range(-4.5, 4.5), 3.0 + 3.0 * power, -randf_range(5.0, 10.0))
 	else:
-		_show_status("Missed timing")
-		if timing > 3.0:
+		hit_done = true
+		_show_status("Too early/late — dot ball, try again!")
+		if distance_to_contact < 4.2 and randf() < 0.06:
 			wickets += 1
-			_show_status("OUT! Wicket lost")
+			_show_status("BOWLED! WICKET")
 	_update_score()
 	delivery_active = false
 	balls += 1
-	auto_delivery_timer = 1.4
+	auto_delivery_timer = 1.8
+
 func _process(delta: float) -> void:
 	if not match_started:
 		return
@@ -349,14 +399,15 @@ func _process(delta: float) -> void:
 					_show_status("AI scored %d runs" % ai_runs)
 				ball.freeze = true
 				_update_score()
-			if ball.position.z > 10 or ball.position.y < -2 or delivery_timer > 4.0:
+			if ball.position.z > 10 or ball.position.y < -2 or delivery_timer > 4.5:
 				delivery_active = false
 				balls += 1
 				if not hit_done:
-					_show_status("DOT BALL")
+					balls += 1
+					_show_status("DOT BALL — no wicket")
 				_update_score()
 				if play_mode == "batting":
-					auto_delivery_timer = 1.4
+					auto_delivery_timer = 1.8
 func _update_score() -> void:
 	if is_instance_valid(runs_label):
 		runs_label.text = "CRICVERSE   %d/%d   •   %d.%d overs" % [score, wickets, int(balls / 6), balls % 6]
