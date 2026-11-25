@@ -1,4 +1,4 @@
-name: Boundary Cricket APK Build
+name: CRICVERSE Android APK Build
 
 on:
   push:
@@ -24,24 +24,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' -print -quit)"
-          if [[ -z "$ZIP_FILE" ]]; then
-            echo "ERROR: Project ZIP not found in repository root"
-            exit 1
-          fi
-          echo "Found archive: $ZIP_FILE"
-          unzip -t "$ZIP_FILE"
           rm -rf extracted game
-          mkdir -p extracted game
-          unzip -q "$ZIP_FILE" -d extracted
-          PROJECT_FILE="$(find extracted -type f -name project.godot -print -quit)"
-          if [[ -z "$PROJECT_FILE" ]]; then
-            echo "ERROR: project.godot not found inside archive"
-            find extracted -maxdepth 4 -type f | head -n 100
-            exit 1
+          mkdir -p game
+          if [[ -s cricverse/project.godot && -s cricverse/main.tscn && -s cricverse/main.gd ]]; then
+            cp -a cricverse/. game/
+            echo "Using native CRICVERSE project"
+          else
+            ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' -print -quit)"
+            if [[ -z "$ZIP_FILE" ]]; then
+              echo "ERROR: CRICVERSE project and starter archive not found"
+              exit 1
+            fi
+            unzip -t "$ZIP_FILE"
+            mkdir -p extracted
+            unzip -q "$ZIP_FILE" -d extracted
+            PROJECT_FILE="$(find extracted -type f -name project.godot -print -quit)"
+            if [[ -z "$PROJECT_FILE" ]]; then
+              echo "ERROR: project.godot not found inside archive"
+              exit 1
+            fi
+            cp -a "$(dirname "$PROJECT_FILE")"/. game/
           fi
-          PROJECT_DIR="$(dirname "$PROJECT_FILE")"
-          cp -a "$PROJECT_DIR"/. game/
           test -s game/project.godot
           echo "Project extracted successfully"
           echo "Project files:"
@@ -135,8 +138,8 @@ jobs:
           architectures/arm64-v8a=true
           version/code=1
           version/name="1.0"
-          package/unique_name="com.boundarycricket.game"
-          package/name="Boundary Cricket"
+          package/unique_name="com.cricverse.mobile"
+          package/name="CRICVERSE"
           package/signed=true
           keystore/debug="/root/debug.keystore"
           keystore/debug_user="androiddebugkey"
@@ -168,7 +171,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p game/build
-          godot --headless --verbose --path game --export-debug "Android" build/BoundaryCricket.apk
+          godot --headless --verbose --path game --export-debug "Android" build/CRICVERSE.apk
           test -s game/build/BoundaryCricket.apk
           echo "APK BUILD SUCCESSFUL"
           ls -lh game/build/BoundaryCricket.apk
@@ -176,6 +179,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Boundary-Cricket-APK
+          name: CRICVERSE-APK
           path: game/build/BoundaryCricket.apk
           if-no-files-found: error
