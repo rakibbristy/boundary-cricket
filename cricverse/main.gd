@@ -2,6 +2,7 @@ extends Node3D
 
 var ball: Node3D
 var batter: Node3D
+var bowler: Node3D
 var score := 0
 var wickets := 0
 var balls := 0
@@ -358,7 +359,7 @@ func make_batter() -> void:
 	batter.get_node("Bat_Blade").rotation_degrees = Vector3(0, 0, -12)
 
 func make_bowler() -> void:
-	var bowler := Node3D.new()
+	bowler = Node3D.new()
 	bowler.name = "Bowler_3D"
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
@@ -372,7 +373,7 @@ func make_bowler() -> void:
 		_add_fielder(Vector3(-12, 0, 12), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(0, 0, 16), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(12, 0, 12), Color(0.9, 0.58, 0.08))
-		_add_fielder(Vector3(0, 0, 5), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(0, 0, 10.2), Color(0.9, 0.58, 0.08))
 		return
 	var skin := Color(0.55, 0.32, 0.22)
 	_capsule(bowler, Vector3(0, 1.2, 0), 0.27, 0.9, Color(0.82, 0.12, 0.1))
@@ -643,6 +644,7 @@ func _bowl() -> void:
 		_show_status("New over started")
 	_update_score()
 	_spawn_ball()
+	_play_character_animation(bowler, "Run", 0.08)
 	delivery_active = true
 	hit_done = false
 	delivery_timer = 0.0
@@ -814,8 +816,10 @@ func _process(delta: float) -> void:
 		if is_instance_valid(batter):
 			batter.position.z = lerpf(run_start_z, run_target_z, run_progress)
 			batter.rotation_degrees.y = 180.0 if run_start_z > 0.0 else 0.0
+			_play_character_animation(batter, "Run", 0.08)
 		if run_progress >= 1.0:
 			run_in_progress = false
+			_play_character_animation(batter, "Idle", 0.12)
 			completed_runs_this_ball += 1
 			score += 1
 			_update_score()
@@ -884,6 +888,8 @@ func _process(delta: float) -> void:
 					best_distance = distance_to_landing
 					active_fielder = candidate
 			fielder_chasing = active_fielder != null
+			if is_instance_valid(active_fielder):
+				_play_character_animation(active_fielder, "Run", 0.08)
 		if is_instance_valid(active_fielder):
 			var catch_point := active_fielder.global_position + Vector3(0.0, 1.35, 0.0)
 			var catch_distance := catch_point.distance_to(ball.global_position)
@@ -906,6 +912,7 @@ func _process(delta: float) -> void:
 					ball.position.y = 0.16
 					ball_velocity = Vector3.ZERO
 					fielder_has_ball = true
+					_play_character_animation(active_fielder, "Idle", 0.1)
 					_show_status("FIELDING! Ball gathered — fielder has it")
 
 	# Hit ball: one ground contact, then controlled roll.
