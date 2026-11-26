@@ -118,11 +118,11 @@ func _build_world() -> void:
 	make_batter()
 	make_bowler()
 	camera = Camera3D.new()
-	camera.position = Vector3(0.0, 6.8, 18.2)
-	camera.fov = 54.0
+	camera.position = Vector3(0.0, 5.8, 19.5)
+	camera.fov = 48.0
 	camera.near = 0.08
 	camera.far = 180.0
-	camera.look_at(Vector3(0.0, 1.0, -1.0), Vector3.UP)
+	camera.look_at(Vector3(0.0, 1.15, -1.8), Vector3.UP)
 	camera.current = true
 	add_child(camera)
 
@@ -262,6 +262,7 @@ func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, color
 
 func _load_rigged_character(asset_path: String, parent: Node3D) -> bool:
 	if not ResourceLoader.exists(asset_path):
+		push_warning("Missing character asset: " + asset_path)
 		return false
 	var packed_scene := load(asset_path) as PackedScene
 	if packed_scene == null:
@@ -276,13 +277,23 @@ func _load_rigged_character(asset_path: String, parent: Node3D) -> bool:
 	for player_node in model.find_children("*", "AnimationPlayer", true, false):
 		var animation_player := player_node as AnimationPlayer
 		var clips := animation_player.get_animation_list()
-		for preferred in ["Idle", "idle", "Armature|Idle", "mixamo.com"]:
-			if clips.has(preferred):
-				animation_player.play(preferred)
-				return true
-		if clips.size() > 0:
+		parent.set_meta("cricverse_animation_player", animation_player)
+		if clips.has("Idle"):
+			animation_player.play("Idle")
+		elif clips.size() > 0:
 			animation_player.play(clips[0])
+		return true
+	push_warning("No AnimationPlayer found in: " + asset_path)
 	return true
+
+func _play_character_animation(character: Node3D, animation_name: String, blend: float = 0.12) -> void:
+	if not is_instance_valid(character) or not character.has_meta("cricverse_animation_player"):
+		return
+	var animation_player := character.get_meta("cricverse_animation_player") as AnimationPlayer
+	if animation_player == null:
+		return
+	if animation_player.has_animation(animation_name) and animation_player.current_animation != animation_name:
+		animation_player.play(animation_name, blend)
 
 
 func _add_batter_details(parent: Node3D) -> void:
@@ -318,7 +329,7 @@ func make_batter() -> void:
 	batter.name = "Batter_3D"
 	batter.position = Vector3(0.75, 0, 7.2)
 	add_child(batter)
-	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", batter):
+	if _load_rigged_character("res://assets/players/batter.gltf", batter):
 		_add_batter_details(batter)
 		return
 	var skin := Color(0.62, 0.38, 0.25)
@@ -351,7 +362,7 @@ func make_bowler() -> void:
 	bowler.name = "Bowler_3D"
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
-	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", bowler):
+	if _load_rigged_character("res://assets/players/bowler.gltf", bowler):
 		_add_bowler_details(bowler)
 		_add_fielder(Vector3(-12, 0, -12), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(0, 0, -16), Color(0.9, 0.58, 0.08))
@@ -388,7 +399,7 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	add_child(fielder)
 	fielder_nodes.append(fielder)
 	fielder_home_positions.append(pos)
-	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", fielder):
+	if _load_rigged_character("res://assets/players/fielder.gltf", fielder):
 		_add_fielder_details(fielder, shirt)
 		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
@@ -724,12 +735,21 @@ func _play_shot(power: float) -> void:
 func _animate_bat_swing() -> void:
 	if not is_instance_valid(batter):
 		return
+	_play_character_animation(batter, "Batting", 0.06)
+	var animation_player := batter.get_meta("cricverse_animation_player", null) as AnimationPlayer
+	if animation_player != null and animation_player.has_animation("Batting"):
+		var swing_length := animation_player.get_animation("Batting").length
+		var swing_tween := create_tween()
+		swing_tween.tween_interval(maxf(0.35, swing_length))
+		swing_tween.tween_callback(func():
+			if is_instance_valid(batter):
+				_play_character_animation(batter, "Idle", 0.1)
+		)
 	var bat_blade := batter.get_node_or_null("Bat_Blade") as Node3D
-	if bat_blade == null:
-		return
-	var tween := create_tween()
-	tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -82), 0.10)
-	tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -12), 0.22)
+	if bat_blade != null:
+		var tween := create_tween()
+		tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -82), 0.10)
+		tween.tween_property(bat_blade, "rotation_degrees", Vector3(0, 0, -12), 0.22)
 
 func _finish_delivery(message: String = "") -> void:
 	delivery_active = false
