@@ -31,8 +31,13 @@ var run_timer := 0.0
 var completed_runs_this_ball := 0
 var shot_boundary_done := false
 var fielder_nodes: Array[Node3D] = []
+var fielder_home_positions: Array[Vector3] = []
 var active_fielder: Node3D = null
 var fielder_chasing := false
+var fielder_has_ball := false
+var timing_meter: ProgressBar
+var delivery_speed := 12.0
+var delivery_speed_name := "MEDIUM"
 var delivery_full_toss := false
 var delivery_bounced := false
 var run_start_z := 7.2
@@ -298,6 +303,7 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	fielder.position = pos
 	add_child(fielder)
 	fielder_nodes.append(fielder)
+	fielder_home_positions.append(pos)
 	if _load_rigged_character("res://assets/players/fielder.gltf", fielder):
 		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
@@ -358,6 +364,13 @@ func _build_hud() -> void:
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 15)
 	v.add_child(status_label)
+	timing_meter = ProgressBar.new()
+	timing_meter.min_value = 0.0
+	timing_meter.max_value = 100.0
+	timing_meter.value = 0.0
+	timing_meter.show_percentage = false
+	timing_meter.custom_minimum_size = Vector2(300, 14)
+	v.add_child(timing_meter)
 	var bat_mode := Button.new()
 	bat_mode.text = "BAT FIRST (AI BOWLS)"
 	bat_mode.position = Vector2(15, 120)
@@ -466,6 +479,8 @@ func _start_match(mode: String) -> void:
 	run_in_progress = false
 	if is_instance_valid(run_button):
 		run_button.disabled = true
+	_reset_batter_to_crease()
+	_reset_fielders()
 	_set_controls()
 	_update_score()
 	_show_status("YOU BAT • AI BOWLS AUTOMATICALLY" if mode == "batting" else "YOU BOWL • AI BATTER PLAYS AUTOMATICALLY")
@@ -549,13 +564,30 @@ func _spawn_ball() -> void:
 	ball.add_child(glow)
 	delivery_full_toss = randf() < 0.18
 	delivery_bounced = false
+	_reset_batter_to_crease()
+	_reset_fielders()
+	var speed_roll: float = randf()
+	if speed_roll < 0.12:
+		delivery_speed = randf_range(17.0, 19.5)
+		delivery_speed_name = "EXPRESS"
+	elif speed_roll < 0.38:
+		delivery_speed = randf_range(14.0, 16.5)
+		delivery_speed_name = "FAST"
+	elif speed_roll < 0.82:
+		delivery_speed = randf_range(10.8, 13.2)
+		delivery_speed_name = "MEDIUM"
+	else:
+		delivery_speed = randf_range(8.0, 10.0)
+		delivery_speed_name = "SLOW"
 	ball.position = Vector3(randf_range(-0.12, 0.12), 2.0, -8.2)
 	add_child(ball)
-	ball_velocity = Vector3(randf_range(-0.12, 0.12), 4.8 if delivery_full_toss else -0.8, 12.4)
+	ball_velocity = Vector3(randf_range(-0.12, 0.12), 4.8 if delivery_full_toss else -0.8, delivery_speed)
+	_show_status("%s DELIVERY%s" % [delivery_speed_name, " • FULL TOSS" if delivery_full_toss else ""])
 	ball_state = "delivery"
 	ball_bounced = false
 	active_fielder = null
 	fielder_chasing = false
+	fielder_has_ball = false
 	delivery_timer = 0.0
 	completed_runs_this_ball = 0
 	shot_boundary_done = false
@@ -610,10 +642,27 @@ func _finish_delivery(message: String = "") -> void:
 	balls += 1
 	if message != "":
 		_show_status(message)
+	_reset_batter_to_crease()
+	_reset_fielders()
 	if is_instance_valid(ball):
 		ball.queue_free()
 	auto_delivery_timer = 1.7
 	_update_score()
+
+func _reset_batter_to_crease() -> void:
+	if is_instance_valid(batter):
+		batter.position = Vector3(0.75, 0.0, 7.2)
+		batter.rotation = Vector3.ZERO
+
+func _reset_fielders() -> void:
+	for i in range(fielder_nodes.size()):
+		var fielder: Node3D = fielder_nodes[i]
+		if is_instance_valid(fielder) and i < fielder_home_positions.size():
+			fielder.position = fielder_home_positions[i]
+			fielder.rotation = Vector3.ZERO
+	active_fielder = null
+	fielder_chasing = false
+	fielder_has_ball = false
 
 func _process(delta: float) -> void:
 	if not match_started:
@@ -637,6 +686,10 @@ func _process(delta: float) -> void:
 		return
 
 	delivery_timer += delta
+	if is_instance_valid(timing_meter):
+		timing_meter.visible = play_mode == "batting" and ball_state == "delivery"
+		if timing_meter.visible:
+			timing_meter.value = clampf((ball.position.z - 2.8) / 4.5 * 100.0, 0.0, 100.0)
 	# Manual ball simulation keeps the ball visible and predictable on mobile.
 	ball_velocity.y -= 7.2 * delta
 	ball.position += ball_velocity * delta
@@ -691,8 +744,8 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! Dot ball.")
 		_update_score()
 
-	# Select one nearest fielder per shot. Others hold their positions to prevent crowding.
-	if ball_state == "shot" and is_instance_valid(ball) and not shot_boundary_done:
+	# One selected fielder attacks the ball, fields it once, then holds possession.
+	if ball_state == "shot" and is_instance_valid(ball) and not shot_boundary_done and not fielder_has_ball:
 		if not fielder_chasing and fielder_nodes.size() > 0:
 			var nearest_distance: float = INF
 			for candidate in fielder_nodes:
@@ -704,24 +757,27 @@ func _process(delta: float) -> void:
 					active_fielder = candidate
 			fielder_chasing = active_fielder != null
 		if is_instance_valid(active_fielder):
-			var target := Vector3(ball.position.x, 0.0, ball.position.z)
-			var to_ball := target - active_fielder.position
+			var horizontal_target := Vector3(ball.position.x, 0.0, ball.position.z)
+			var to_ball := horizontal_target - active_fielder.position
 			to_ball.y = 0.0
 			var distance_to_ball: float = to_ball.length()
-			if distance_to_ball > 0.7:
-				var step: float = minf(6.2 * delta, distance_to_ball - 0.62)
-				active_fielder.position += to_ball.normalized() * step
-				active_fielder.rotation.y = atan2(to_ball.x, to_ball.z)
-			elif ball.position.y > 1.1 and ball.position.y < 3.4 and ball_velocity.y < 0.0:
+			# Catch only when the falling ball is physically within reach.
+			var catch_distance: float = Vector3(active_fielder.position.x, active_fielder.position.y + 1.45, active_fielder.position.z).distance_to(ball.position)
+			if ball.position.y > 1.0 and ball.position.y < 3.6 and ball_velocity.y < 0.0 and catch_distance < 0.95:
 				wickets += 1
-				_show_status("CAUGHT! Fielder completed the catch")
+				_show_status("CAUGHT! Clean catch by the fielder")
 				_finish_delivery()
 				return
-			elif ball.position.y <= 0.25:
-				ball.position.x = active_fielder.position.x
-				ball.position.z = active_fielder.position.z
+			if distance_to_ball > 0.8:
+				var step: float = minf(7.0 * delta, distance_to_ball - 0.72)
+				active_fielder.position += to_ball.normalized() * step
+				active_fielder.rotation.y = atan2(to_ball.x, to_ball.z)
+			elif ball.position.y <= 0.32:
+				# Ball is gathered at ground level; no more chasing or teleporting.
+				ball.position.y = 0.16
 				ball_velocity = Vector3.ZERO
-				_show_status("FIELDING! Ball stopped by fielder")
+				fielder_has_ball = true
+				_show_status("FIELDING! Ball gathered — fielder has it")
 
 	# Hit ball: one ground contact, then controlled roll.
 	if ball_state == "shot":
@@ -737,14 +793,14 @@ func _process(delta: float) -> void:
 			# Boundary replaces any runs attempted on the same delivery.
 			score = maxi(0, score - completed_runs_this_ball)
 			completed_runs_this_ball = 0
-			var is_six: bool = ball.position.y > 1.05
+			var is_six: bool = ball.position.y > 1.35 and shot_power >= 1.0
 			var boundary_runs: int = 6 if is_six else 4
 			score += boundary_runs
 			_show_status("SIX! +6" if is_six else "FOUR! +4")
 			_update_score()
 			_finish_delivery()
 			return
-		if ball_velocity.length() < 1.15 or delivery_timer > 6.0:
+		if fielder_has_ball or ball_velocity.length() < 1.15 or delivery_timer > 6.0:
 			run_in_progress = false
 			if is_instance_valid(run_button):
 				run_button.disabled = true
