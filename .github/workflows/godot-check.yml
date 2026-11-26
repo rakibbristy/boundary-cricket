@@ -1,0 +1,32 @@
+name: Godot project validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cricverse/**"
+      - ".github/workflows/godot-check.yml"
+  pull_request:
+    paths:
+      - "cricverse/**"
+      - ".github/workflows/godot-check.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.3
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+
+      - name: Import project and validate scripts
+        run: godot --headless --editor --path cricverse --quit
+
+      - name: Launch main scene headlessly
+        run: godot --headless --path cricverse --quit-after 5
