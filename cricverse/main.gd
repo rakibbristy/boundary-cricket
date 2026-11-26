@@ -318,7 +318,7 @@ func make_batter() -> void:
 	batter.name = "Batter_3D"
 	batter.position = Vector3(0.75, 0, 7.2)
 	add_child(batter)
-	if _load_rigged_character("res://assets/players/batter.gltf", batter):
+	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", batter):
 		_add_batter_details(batter)
 		return
 	var skin := Color(0.62, 0.38, 0.25)
@@ -351,7 +351,7 @@ func make_bowler() -> void:
 	bowler.name = "Bowler_3D"
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
-	if _load_rigged_character("res://assets/players/bowler.gltf", bowler):
+	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", bowler):
 		_add_bowler_details(bowler)
 		_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
@@ -378,7 +378,7 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	add_child(fielder)
 	fielder_nodes.append(fielder)
 	fielder_home_positions.append(pos)
-	if _load_rigged_character("res://assets/players/fielder.gltf", fielder):
+	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", fielder):
 		_add_fielder_details(fielder, shirt)
 		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
