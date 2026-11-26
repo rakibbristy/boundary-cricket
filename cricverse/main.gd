@@ -56,10 +56,24 @@ func _build_world() -> void:
 	var env := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_SKY
-	environment.sky = Sky.new()
+	var sky := Sky.new()
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.018, 0.045, 0.105)
+	sky_material.sky_horizon_color = Color(0.22, 0.31, 0.43)
+	sky_material.ground_bottom_color = Color(0.018, 0.028, 0.035)
+	sky_material.ground_horizon_color = Color(0.12, 0.17, 0.21)
+	sky_material.sun_angle_max = 18.0
+	sky.sky_material = sky_material
+	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.72, 0.78, 0.9)
-	environment.ambient_light_energy = 0.7
+	environment.ambient_light_color = Color(0.62, 0.72, 0.88)
+	environment.ambient_light_energy = 0.82
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.28
+	environment.fog_enabled = true
+	environment.fog_light_color = Color(0.15, 0.21, 0.29)
+	environment.fog_density = 0.006
 	env.environment = environment
 	add_child(env)
 
@@ -104,8 +118,11 @@ func _build_world() -> void:
 	make_batter()
 	make_bowler()
 	camera = Camera3D.new()
-	camera.position = Vector3(0, 8.2, 16.5)
-	camera.rotation_degrees = Vector3(-19, 0, 0)
+	camera.position = Vector3(0.0, 6.8, 18.2)
+	camera.fov = 54.0
+	camera.near = 0.08
+	camera.far = 180.0
+	camera.look_at(Vector3(0.0, 1.0, -1.0), Vector3.UP)
 	camera.current = true
 	add_child(camera)
 
@@ -267,12 +284,42 @@ func _load_rigged_character(asset_path: String, parent: Node3D) -> bool:
 			animation_player.play(clips[0])
 	return true
 
+
+func _add_batter_details(parent: Node3D) -> void:
+	# Helmet grille, shirt piping, belt and boot details on the original player mesh.
+	var grille := Color(0.78, 0.84, 0.91)
+	for x in [-0.105, -0.035, 0.035, 0.105]:
+		_capsule(parent, Vector3(x, 1.94, -0.205), 0.012, 0.30, grille)
+	for y in [1.84, 1.92, 2.00, 2.08]:
+		_capsule(parent, Vector3(0, y, -0.21), 0.012, 0.28, grille, Vector3(0, 0, 90))
+	_capsule(parent, Vector3(0, 0.98, 0.0), 0.035, 0.58, Color(0.92, 0.72, 0.22), Vector3(0, 0, 90))
+	for side in [-1.0, 1.0]:
+		_capsule(parent, Vector3(side * 0.285, 1.42, -0.005), 0.018, 0.46, Color(0.92, 0.76, 0.28), Vector3(0, 0, side * 90.0))
+		_capsule(parent, Vector3(side * 0.17, 0.12, 0.02), 0.035, 0.32, Color(0.035, 0.045, 0.06), Vector3(90, 0, 0))
+
+func _add_bowler_details(parent: Node3D) -> void:
+	var trim := Color(0.98, 0.72, 0.18)
+	_capsule(parent, Vector3(0, 1.62, -0.19), 0.025, 0.48, trim, Vector3(0, 0, 90))
+	_capsule(parent, Vector3(0, 0.98, 0.0), 0.035, 0.56, Color(0.08, 0.08, 0.1), Vector3(0, 0, 90))
+	for side in [-1.0, 1.0]:
+		_capsule(parent, Vector3(side * 0.29, 1.4, -0.02), 0.018, 0.42, trim, Vector3(0, 0, side * 90.0))
+		_sphere(parent, Vector3(side * 0.13, 0.12, 0.0), 0.065, Color(0.025, 0.03, 0.04))
+
+func _add_fielder_details(parent: Node3D, shirt: Color) -> void:
+	var trim := Color(0.96, 0.82, 0.35)
+	_capsule(parent, Vector3(0, 1.47, -0.16), 0.018, 0.32, trim, Vector3(0, 0, 90))
+	_capsule(parent, Vector3(0, 0.91, 0.0), 0.03, 0.42, Color(0.07, 0.08, 0.1), Vector3(0, 0, 90))
+	for side in [-1.0, 1.0]:
+		_capsule(parent, Vector3(side * 0.28, 1.25, -0.01), 0.014, 0.34, trim, Vector3(0, 0, side * 90.0))
+		_sphere(parent, Vector3(side * 0.13, 0.12, 0.0), 0.055, Color(0.025, 0.03, 0.04))
+
 func make_batter() -> void:
 	batter = Node3D.new()
 	batter.name = "Batter_3D"
 	batter.position = Vector3(0.75, 0, 7.2)
 	add_child(batter)
 	if _load_rigged_character("res://assets/players/batter.gltf", batter):
+		_add_batter_details(batter)
 		return
 	var skin := Color(0.62, 0.38, 0.25)
 	var shirt := Color(0.08, 0.22, 0.72)
@@ -305,6 +352,7 @@ func make_bowler() -> void:
 	bowler.position = Vector3(0, 0, -7.5)
 	add_child(bowler)
 	if _load_rigged_character("res://assets/players/bowler.gltf", bowler):
+		_add_bowler_details(bowler)
 		_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
 		_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
@@ -331,6 +379,7 @@ func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	fielder_nodes.append(fielder)
 	fielder_home_positions.append(pos)
 	if _load_rigged_character("res://assets/players/fielder.gltf", fielder):
+		_add_fielder_details(fielder, shirt)
 		return
 	_capsule(fielder, Vector3(0, 1.0, 0), 0.2, 0.68, shirt)
 	_sphere(fielder, Vector3(0, 1.52, 0), 0.16, Color(0.55, 0.34, 0.23))
