@@ -123,9 +123,9 @@ func _build_world() -> void:
 	camera.fov = 48.0
 	camera.near = 0.08
 	camera.far = 180.0
+	add_child(camera)
 	camera.look_at(Vector3(0.0, 1.15, -1.8), Vector3.UP)
 	camera.current = true
-	add_child(camera)
 
 
 func _build_stadium() -> void:
