@@ -100,6 +100,7 @@ func _build_world() -> void:
 		_make_box("Bail", Vector3(0, 1.10, z), Vector3(0.82, 0.055, 0.075), Color(0.98, 0.91, 0.73))
 	_add_oval_boundary()
 	_build_stadium()
+	_add_stadium_details()
 	make_batter()
 	make_bowler()
 	camera = Camera3D.new()
@@ -137,6 +138,31 @@ func _build_stadium() -> void:
 			lamp.omni_range = 28.0
 			lamp.shadow_enabled = false
 			add_child(lamp)
+
+
+func _add_stadium_details() -> void:
+	# Original CRICVERSE visual identity: illuminated score displays and sight screens.
+	for side in [-1, 1]:
+		var screen := _make_box("CRICVERSE_Score_Display", Vector3(float(side) * 15.2, 5.0, -1.5), Vector3(0.32, 3.0, 5.6), Color(0.012, 0.035, 0.075))
+		screen.rotation.y = PI * 0.5 if side < 0 else -PI * 0.5
+		var screen_label := Label3D.new()
+		screen_label.name = "Score_Display_Text"
+		screen_label.text = "CRICVERSE\nYOUR WORLD. YOUR CRICKET."
+		screen_label.font_size = 32
+		screen_label.pixel_size = 0.012
+		screen_label.modulate = Color(0.35, 0.92, 1.0)
+		screen_label.position = Vector3(0.0, 0.0, 0.18)
+		screen.add_child(screen_label)
+	# Sight screens at both ends give the pitch a recognisable broadcast-ground layout.
+	for end_sign in [-1, 1]:
+		var sight := _make_box("Sight_Screen", Vector3(0, 2.2, float(end_sign) * 18.7), Vector3(7.0, 4.2, 0.42), Color(0.82, 0.84, 0.82))
+		sight.material_override = _mat(Color(0.82, 0.84, 0.82), 0.0, 0.95)
+	# Low-profile LED fascia around the near-side boundary.
+	for side in [-1, 1]:
+		var fascia := _make_box("LED_Boundary_Fascia", Vector3(float(side) * 15.4, 0.55, 0), Vector3(0.18, 0.72, 35.0), Color(0.015, 0.12, 0.19))
+		fascia.material_override = _mat(Color(0.015, 0.12, 0.19), 0.15, 0.38)
+		for z in range(-16, 17, 4):
+			_make_box("LED_Fascia_Light", Vector3(float(side) * 15.29, 0.58, float(z)), Vector3(0.035, 0.12, 2.2), Color(0.08, 0.72, 0.92))
 
 func _add_oval_boundary() -> void:
 	var ring := TorusMesh.new()
@@ -354,7 +380,17 @@ func _build_hud() -> void:
 	add_child(layer)
 	var panel := PanelContainer.new()
 	panel.position = Vector2(12, 12)
-	panel.size = Vector2(340, 92)
+	panel.size = Vector2(340, 100)
+	var panel_skin := StyleBoxFlat.new()
+	panel_skin.bg_color = Color(0.012, 0.035, 0.075, 0.92)
+	panel_skin.set_corner_radius_all(14)
+	panel_skin.set_border_width_all(2)
+	panel_skin.border_color = Color(0.08, 0.68, 0.88, 0.9)
+	panel_skin.content_margin_left = 14
+	panel_skin.content_margin_right = 14
+	panel_skin.content_margin_top = 8
+	panel_skin.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", panel_skin)
 	layer.add_child(panel)
 	var v := VBoxContainer.new()
 	panel.add_child(v)
