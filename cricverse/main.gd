@@ -353,10 +353,15 @@ func make_bowler() -> void:
 	add_child(bowler)
 	if _load_rigged_character("res://assets/players/quaternius_superhero_male.glb", bowler):
 		_add_bowler_details(bowler)
-		_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
-		_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
-		_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
-		_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(-12, 0, -12), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(0, 0, -16), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(12, 0, -12), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(-15, 0, -2), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(15, 0, -2), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(-12, 0, 12), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(0, 0, 16), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(12, 0, 12), Color(0.9, 0.58, 0.08))
+		_add_fielder(Vector3(0, 0, 5), Color(0.9, 0.58, 0.08))
 		return
 	var skin := Color(0.55, 0.32, 0.22)
 	_capsule(bowler, Vector3(0, 1.2, 0), 0.27, 0.9, Color(0.82, 0.12, 0.1))
@@ -367,10 +372,15 @@ func make_bowler() -> void:
 	_capsule(bowler, Vector3(-0.34, 1.4, 0), 0.075, 0.62, Color(0.82, 0.12, 0.1), Vector3(0, 0, -25))
 	_capsule(bowler, Vector3(0.34, 1.46, -0.1), 0.075, 0.68, Color(0.82, 0.12, 0.1), Vector3(0, 0, 25))
 	_sphere(bowler, Vector3(0.48, 1.72, -0.26), 0.075, skin)
-	_add_fielder(Vector3(-9, 0, -5), Color(0.9, 0.58, 0.08))
-	_add_fielder(Vector3(8, 0, -4), Color(0.9, 0.58, 0.08))
-	_add_fielder(Vector3(-10, 0, 7), Color(0.9, 0.58, 0.08))
-	_add_fielder(Vector3(10, 0, 8), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(-12, 0, -12), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(0, 0, -16), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(12, 0, -12), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(-15, 0, -2), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(15, 0, -2), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(-12, 0, 12), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(0, 0, 16), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(12, 0, 12), Color(0.9, 0.58, 0.08))
+	_add_fielder(Vector3(0, 0, 5), Color(0.9, 0.58, 0.08))
 
 func _add_fielder(pos: Vector3, shirt: Color) -> void:
 	var fielder := Node3D.new()
@@ -829,40 +839,54 @@ func _process(delta: float) -> void:
 			_show_status("BEATEN! Dot ball.")
 		_update_score()
 
-	# One selected fielder attacks the ball, fields it once, then holds possession.
+	# Predict the landing point so the fielder intercepts the ball instead of chasing its current position.
 	if ball_state == "shot" and is_instance_valid(ball) and not shot_boundary_done and not fielder_has_ball:
+		var predicted_target := Vector3(ball.position.x, 0.0, ball.position.z)
+		if ball.position.y > 0.18:
+			var gravity := 7.2
+			var discriminant := ball_velocity.y * ball_velocity.y + 2.0 * gravity * ball.position.y
+			var landing_time := (ball_velocity.y + sqrt(discriminant)) / gravity
+			landing_time = clampf(landing_time, 0.0, 2.8)
+			predicted_target = Vector3(ball.position.x + ball_velocity.x * landing_time, 0.0, ball.position.z + ball_velocity.z * landing_time)
+		# Keep the target inside the oval playing area.
+		var oval_ratio := Vector2(predicted_target.x / 15.0, predicted_target.z / 20.0)
+		if oval_ratio.length() > 1.0:
+			oval_ratio = oval_ratio.normalized()
+			predicted_target.x = oval_ratio.x * 15.0
+			predicted_target.z = oval_ratio.y * 20.0
 		if not fielder_chasing and fielder_nodes.size() > 0:
-			var nearest_distance: float = INF
+			var best_distance := INF
 			for candidate in fielder_nodes:
 				if not is_instance_valid(candidate):
 					continue
-				var d: float = Vector2(candidate.position.x - ball.position.x, candidate.position.z - ball.position.z).length()
-				if d < nearest_distance:
-					nearest_distance = d
+				var distance_to_landing := Vector2(candidate.position.x - predicted_target.x, candidate.position.z - predicted_target.z).length()
+				if distance_to_landing < best_distance:
+					best_distance = distance_to_landing
 					active_fielder = candidate
 			fielder_chasing = active_fielder != null
 		if is_instance_valid(active_fielder):
-			var horizontal_target := Vector3(ball.position.x, 0.0, ball.position.z)
-			var to_ball := horizontal_target - active_fielder.position
-			to_ball.y = 0.0
-			var distance_to_ball: float = to_ball.length()
-			# Catch only when the falling ball is physically within reach.
-			var catch_distance: float = Vector3(active_fielder.position.x, active_fielder.position.y + 1.45, active_fielder.position.z).distance_to(ball.position)
-			if ball.position.y > 1.0 and ball.position.y < 3.6 and ball_velocity.y < 0.0 and catch_distance < 0.95:
+			var catch_point := active_fielder.global_position + Vector3(0.0, 1.35, 0.0)
+			var catch_distance := catch_point.distance_to(ball.global_position)
+			if ball.position.y > 0.65 and ball.position.y < 3.9 and ball_velocity.y < 0.0 and catch_distance < 0.92:
 				wickets += 1
 				_show_status("CAUGHT! Clean catch by the fielder")
 				_finish_delivery()
 				return
-			if distance_to_ball > 0.8:
-				var step: float = minf(7.0 * delta, distance_to_ball - 0.72)
-				active_fielder.position += to_ball.normalized() * step
-				active_fielder.rotation.y = atan2(to_ball.x, to_ball.z)
+			var ground_target := Vector3(ball.position.x, 0.0, ball.position.z) if ball.position.y <= 0.32 else predicted_target
+			var to_target := ground_target - active_fielder.position
+			to_target.y = 0.0
+			var distance_to_target := to_target.length()
+			if distance_to_target > 0.48:
+				var step := minf(8.4 * delta, distance_to_target)
+				active_fielder.position += to_target.normalized() * step
+				active_fielder.rotation.y = atan2(to_target.x, to_target.z)
 			elif ball.position.y <= 0.32:
-				# Ball is gathered at ground level; no more chasing or teleporting.
-				ball.position.y = 0.16
-				ball_velocity = Vector3.ZERO
-				fielder_has_ball = true
-				_show_status("FIELDING! Ball gathered — fielder has it")
+				var gather_distance := Vector2(active_fielder.position.x - ball.position.x, active_fielder.position.z - ball.position.z).length()
+				if gather_distance <= 0.82:
+					ball.position.y = 0.16
+					ball_velocity = Vector3.ZERO
+					fielder_has_ball = true
+					_show_status("FIELDING! Ball gathered — fielder has it")
 
 	# Hit ball: one ground contact, then controlled roll.
 	if ball_state == "shot":
